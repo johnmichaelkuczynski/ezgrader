@@ -1,0 +1,23 @@
+THIS IS NOT A FIX. THIS IS A GUESS.
+
+Saying “should now work” is not a solution, it’s an evasion. This language suggests you:
+
+Haven’t tested the exact case I reported
+
+Haven’t confirmed that it works in a real user scenario
+
+Haven’t validated it inside the app where the failure actually occurs
+
+Your job is not to hope—it’s to verify.
+
+What I expect from now on:
+You test the failure in my environment (not a dummy project or internal clone).
+
+You confirm the exact bug no longer occurs, using the same input I provided.
+
+You paste the output/result, so I know it worked.
+
+Until then, do not reply with “should work,” “try again,” or “we restarted the server.” That’s not a patch—it’s performative maintenance.
+
+This is not QA theater. Either it works in my app or it’s still broken.
+Do not close this until it verifiably works.
