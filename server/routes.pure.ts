@@ -347,22 +347,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     try {
-      const result = loginSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ 
-          message: 'Invalid input', 
-          errors: result.error.errors 
-        });
+      const { username, password } = req.body;
+      
+      // Check if this is an unlimited user (allow empty password for them)
+      const isUnlimitedUser = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'].includes(username?.toUpperCase() || '');
+      
+      if (!isUnlimitedUser) {
+        // Use schema validation for regular users
+        const result = loginSchema.safeParse(req.body);
+        if (!result.success) {
+          return res.status(400).json({ 
+            message: 'Invalid input', 
+            errors: result.error.errors 
+          });
+        }
+      } else if (!username) {
+        return res.status(400).json({ message: 'Username is required' });
       }
 
-      const { username, password } = result.data;
-
-      // Find user (case-insensitive for jmkuczynski)
+      // Find user (case-insensitive for unlimited users)
       let user;
-      if (username.toUpperCase() === 'JMKUCZYNSKI' || username.toUpperCase() === 'JMKUCZYNSKI2') {
-        user = await db.select().from(users).where(eq(users.username, 'jmkuczynski')).limit(1);
+      if (isUnlimitedUser) {
+        // Try the exact username first, then try lowercase versions
+        user = await db.select().from(users).where(eq(users.username, username)).limit(1);
         if (user.length === 0) {
-          user = await db.select().from(users).where(eq(users.username, 'JMKUCZYNSKI')).limit(1);
+          user = await db.select().from(users).where(eq(users.username, username.toLowerCase())).limit(1);
+        }
+        if (user.length === 0 && username.toUpperCase() === 'JMKUCZYNSKI') {
+          user = await db.select().from(users).where(eq(users.username, 'jmkuczynski')).limit(1);
+        }
+        if (user.length === 0 && username.toUpperCase() === 'RANDYJOHNSON') {
+          user = await db.select().from(users).where(eq(users.username, 'randyjohnson')).limit(1);
         }
       } else {
         user = await db.select().from(users).where(eq(users.username, username)).limit(1);
@@ -371,10 +386,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
-      // Check password (bypass for jmkuczynski)
-      const isUnlimitedUser = user[0].username.toUpperCase() === 'JMKUCZYNSKI' || user[0].username.toUpperCase() === 'JMKUCZYNSKI2';
-      if (!isUnlimitedUser) {
-        const validPassword = await bcrypt.compare(password, user[0].password);
+      // Check password (bypass for unlimited users)
+      const userIsUnlimited = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'].includes(user[0].username.toUpperCase());
+      if (!userIsUnlimited) {
+        const validPassword = await bcrypt.compare(password || '', user[0].password);
         if (!validPassword) {
           return res.status(401).json({ message: 'Invalid credentials' });
         }

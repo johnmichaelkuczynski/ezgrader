@@ -115,8 +115,8 @@ Changelog:
   * Updated all placeholder texts to show keyboard shortcuts for improved UX
   * Chat already had Enter key functionality (Enter to send, Shift+Enter for new line)
 - January 17, 2025: Fixed grading system validation to accept empty instructions with automatic defaults
-- January 17, 2025: Implemented unlimited credits system for username "JMKUCZYNSKI" for app testing
-- January 17, 2025: Updated credit display to show "∞ credits" for unlimited accounts
+- January 17, 2025: Implemented unlimited credits system for usernames "JMKUCZYNSKI" and "RANDYJOHNSON" for app testing
+- January 17, 2025: Updated credit display to show "∞ credits" for unlimited accounts (jmkuczynski, randyjohnson)
 - January 17, 2025: Verified complete app functionality with proper grade extraction and AI detection
 - January 12, 2025: Fixed complete freemium system - unregistered users get 200-word previews, registration and Stripe payment flow working
 - January 12, 2025: Implemented default grading instructions so app works without user input

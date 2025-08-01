@@ -44,7 +44,7 @@ function Navigation() {
               <div className="flex items-center space-x-2">
                 <Coins className="h-4 w-4 text-blue-600" />
                 <Badge variant="secondary">
-                  {(user.username?.toUpperCase() === 'JMKUCZYNSKI' || user.username?.toUpperCase() === 'JMKUCZYNSKI2') ? '∞ credits' : `${user.credits?.toLocaleString() || 0} credits`}
+                  {['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'].includes(user.username?.toUpperCase() || '') ? '∞ credits' : `${user.credits?.toLocaleString() || 0} credits`}
                 </Badge>
               </div>
               <Button
