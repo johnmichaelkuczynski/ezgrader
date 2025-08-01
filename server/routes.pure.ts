@@ -1157,9 +1157,17 @@ Return ONLY the JSON object, no additional text.
         console.log(`Generated preview for unregistered user. Preview length: ${finalResponse.length}`);
       } else {
         // Deduct credits for registered users with sufficient credits
-        await deductCredits(userId, TOKEN_COSTS.grading, 'grading', 'AI grading assignment');
-        creditsDeducted = TOKEN_COSTS.grading;
-        console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+        const deductionResult = await deductCredits(userId, TOKEN_COSTS.grading, 'grading', 'AI grading assignment');
+        if (deductionResult) {
+          creditsDeducted = TOKEN_COSTS.grading;
+          // Check if this is an unlimited user before logging deduction
+          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+          const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+          const isUnlimited = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
+          if (!isUnlimited) {
+            console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+          }
+        }
       }
       
       return res.json({
@@ -1381,9 +1389,17 @@ The grade for Submission 1 should be honest but typically in the 20-30 range for
         console.log(`Generated comparison preview for unregistered user. Preview length: ${finalResponse.length}`);
       } else {
         // Deduct credits for registered users with sufficient credits
-        await deductCredits(userId, TOKEN_COSTS.comparison, 'comparison', 'Assignment comparison');
-        creditsDeducted = TOKEN_COSTS.comparison;
-        console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+        const deductionResult = await deductCredits(userId, TOKEN_COSTS.comparison, 'comparison', 'Assignment comparison');
+        if (deductionResult) {
+          creditsDeducted = TOKEN_COSTS.comparison;
+          // Check if this is an unlimited user before logging deduction
+          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+          const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+          const isUnlimited = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
+          if (!isUnlimited) {
+            console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+          }
+        }
       }
       
       return res.json({
@@ -1668,9 +1684,17 @@ Be helpful, knowledgeable, and provide detailed responses. If the user asks you 
         console.log(`Generated chat preview for unregistered user. Preview length: ${finalResponse.length}`);
       } else {
         // Deduct credits for registered users with sufficient credits
-        await deductCredits(userId, TOKEN_COSTS.chat, 'chat', 'AI chat conversation');
-        creditsDeducted = TOKEN_COSTS.chat;
-        console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+        const deductionResult = await deductCredits(userId, TOKEN_COSTS.chat, 'chat', 'AI chat conversation');
+        if (deductionResult) {
+          creditsDeducted = TOKEN_COSTS.chat;
+          // Check if this is an unlimited user before logging deduction
+          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+          const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+          const isUnlimited = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
+          if (!isUnlimited) {
+            console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+          }
+        }
       }
       
       res.json({ 
@@ -2406,9 +2430,17 @@ Continue from where it left off and provide a proper ending:`;
         console.log(`Generated perfect answer preview for unregistered user. Preview length: ${finalResponse.length}`);
       } else {
         // Deduct credits for registered users with sufficient credits
-        await deductCredits(userId, TOKEN_COSTS.perfectEssay, 'perfect_essay', 'Perfect assignment generation');
-        creditsDeducted = TOKEN_COSTS.perfectEssay;
-        console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+        const deductionResult = await deductCredits(userId, TOKEN_COSTS.perfectEssay, 'perfect_essay', 'Perfect assignment generation');
+        if (deductionResult) {
+          creditsDeducted = TOKEN_COSTS.perfectEssay;
+          // Check if this is an unlimited user before logging deduction
+          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+          const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+          const isUnlimited = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
+          if (!isUnlimited) {
+            console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+          }
+        }
       }
 
       res.json({ 
