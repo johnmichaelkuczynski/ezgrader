@@ -1,7 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from 'bcryptjs';
-import Stripe from 'stripe';
 import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage } from "@shared/schema";
 import { detectAIContent } from "./services/gptzero";
@@ -17,25 +16,28 @@ import * as path from "path";
 import mammoth from "mammoth";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2023-10-16',
-});
+import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
 
 // Extend session type
 declare module 'express-session' {
   interface SessionData {
     userId?: number;
     username?: string;
+    pendingPurchase?: {
+      tier: string;
+      tokens: number;
+      price: number;
+      userId?: number;
+    };
   }
 }
 
-// Token pricing tiers
+// Token pricing tiers (PayPal uses dollars, not cents)
 const TOKEN_PRICING = {
-  "5": { price: 500, tokens: 5000 }, // $5 in cents
-  "10": { price: 1000, tokens: 20000 },
-  "100": { price: 10000, tokens: 500000 },
-  "1000": { price: 100000, tokens: 10000000 },
+  "5": { price: 5.00, tokens: 5000 },
+  "10": { price: 10.00, tokens: 20000 },
+  "100": { price: 100.00, tokens: 500000 },
+  "1000": { price: 1000.00, tokens: 10000000 },
 };
 
 // Token costs for different actions
@@ -59,9 +61,15 @@ async function checkCredits(userId: number | undefined, requiredTokens: number):
 
 async function deductCredits(userId: number, tokensUsed: number, action: string, description?: string): Promise<boolean> {
   try {
+    // Get current user credits
+    const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    if (user.length === 0) return false;
+    
+    const newCredits = user[0].credits - tokensUsed;
+    
     // Deduct from user credits
     await db.update(users)
-      .set({ credits: users.credits - tokensUsed })
+      .set({ credits: newCredits })
       .where(eq(users.id, userId));
     
     // Log usage
@@ -400,8 +408,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Stripe payment routes
-  app.post('/api/create-payment-intent', async (req: Request, res: Response) => {
+  // PayPal payment routes
+  app.get("/paypal/setup", async (req, res) => {
+    await loadPaypalDefault(req, res);
+  });
+
+  app.post("/paypal/order", async (req, res) => {
+    await createPaypalOrder(req, res);
+  });
+
+  app.post("/paypal/order/:orderID/capture", async (req, res) => {
+    await capturePaypalOrder(req, res);
+  });
+
+  // PayPal purchase initiation route
+  app.post('/api/create-paypal-order', async (req: Request, res: Response) => {
     try {
       const { tier } = purchaseSchema.parse(req.body);
       const pricing = TOKEN_PRICING[tier];
@@ -409,55 +430,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!pricing) {
         return res.status(400).json({ error: 'Invalid tier' });
       }
-
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: pricing.price,
-        currency: 'usd',
-        metadata: {
-          tier,
-          tokens: pricing.tokens.toString(),
-          userId: req.session?.userId?.toString() || 'unregistered',
-        },
+      
+      // Store the purchase intent in session for completion later
+      req.session.pendingPurchase = {
+        tier,
+        tokens: pricing.tokens,
+        price: pricing.price,
+        userId: req.session?.userId
+      };
+      
+      res.json({ 
+        amount: pricing.price.toString(),
+        currency: 'USD',
+        intent: 'CAPTURE',
+        tokens: pricing.tokens,
+        tier
       });
-
-      res.json({ clientSecret: paymentIntent.client_secret });
     } catch (error: any) {
-      console.error('Payment intent creation failed:', error);
+      console.error('Error creating PayPal order:', error);
       res.status(500).json({ error: error.message });
     }
   });
 
-  app.post('/api/webhook/stripe', async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'] as string;
-
+  // PayPal purchase completion route
+  app.post('/api/complete-paypal-purchase', async (req: Request, res: Response) => {
     try {
-      const event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
-
-      if (event.type === 'payment_intent.succeeded') {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        const { tier, tokens, userId } = paymentIntent.metadata;
-
-        if (userId && userId !== 'unregistered') {
-          // Add credits to user
+      const { orderID } = req.body;
+      const pendingPurchase = req.session.pendingPurchase;
+      
+      if (!pendingPurchase) {
+        return res.status(400).json({ message: 'No pending purchase found' });
+      }
+      
+      const { tier, tokens, price, userId } = pendingPurchase;
+      
+      // Record the successful purchase
+      if (userId) {
+        await db.insert(purchases).values({
+          userId: userId,
+          paypalOrderId: orderID,
+          amount: Math.round(price * 100),
+          tokensAdded: tokens,
+          status: 'completed',
+        });
+        
+        // Get current user credits and add new tokens
+        const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        if (user.length > 0) {
+          const newCredits = user[0].credits + tokens;
           await db.update(users)
-            .set({ credits: users.credits + parseInt(tokens) })
-            .where(eq(users.id, parseInt(userId)));
-
-          // Record purchase
-          await db.insert(purchases).values({
-            userId: parseInt(userId),
-            stripePaymentIntentId: paymentIntent.id,
-            amount: paymentIntent.amount,
-            tokensAdded: parseInt(tokens),
-            status: 'completed',
-          });
+            .set({ credits: newCredits })
+            .where(eq(users.id, userId));
         }
       }
-
-      res.json({ received: true });
+      
+      // Clear the pending purchase
+      delete req.session.pendingPurchase;
+      
+      res.json({ 
+        success: true, 
+        message: 'Purchase completed successfully',
+        tokensAdded: tokens
+      });
     } catch (error: any) {
-      console.error('Webhook error:', error);
-      res.status(400).send(`Webhook Error: ${error.message}`);
+      console.error('Error completing PayPal purchase:', error);
+      res.status(500).json({ error: error.message });
     }
   });
   
@@ -803,7 +840,7 @@ Return ONLY the JSON object, no additional text.
         });
       }
 
-      const hasCredits = await checkCredits(userId, TOKEN_COSTS.aiDetection);
+      const hasCredits = userId ? await checkCredits(userId, TOKEN_COSTS.aiDetection) : false;
       if (!hasCredits) {
         return res.status(402).json({ 
           error: 'Insufficient credits. Please purchase more credits to use AI detection.',
@@ -821,7 +858,9 @@ Return ONLY the JSON object, no additional text.
       const result = await detectAIContent(text);
       
       // Deduct credits for registered users
-      await deductCredits(userId, TOKEN_COSTS.aiDetection, 'ai_detection', 'AI content detection');
+      if (userId) {
+        await deductCredits(userId, TOKEN_COSTS.aiDetection, 'ai_detection', 'AI content detection');
+      }
       
       res.json({
         ...result,
@@ -1107,7 +1146,9 @@ Return ONLY the JSON object, no additional text.
         console.log(`Generated preview for unregistered user. Preview length: ${finalResponse.length}`);
       } else {
         // Deduct credits for registered users with sufficient credits
-        await deductCredits(userId, TOKEN_COSTS.grading, 'grading', 'AI grading assignment');
+        if (userId) {
+          await deductCredits(userId, TOKEN_COSTS.grading, 'grading', 'AI grading assignment');
+        }
         creditsDeducted = TOKEN_COSTS.grading;
         console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
       }

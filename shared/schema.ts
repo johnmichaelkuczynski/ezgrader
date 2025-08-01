@@ -73,7 +73,8 @@ export const assignmentAttachments = pgTable("assignment_attachments", {
 export const purchases = pgTable("purchases", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   userId: integer("user_id").references(() => users.id),
-  stripePaymentIntentId: text("stripe_payment_intent_id").notNull(),
+  paypalOrderId: text("paypal_order_id"),
+  stripePaymentIntentId: text("stripe_payment_intent_id"),
   amount: integer("amount").notNull(), // Amount in cents
   tokensAdded: integer("tokens_added").notNull(),
   status: text("status").notNull(), // 'pending', 'completed', 'failed'
