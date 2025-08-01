@@ -61,8 +61,9 @@ async function checkCredits(userId: number | undefined, requiredTokens: number):
   const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (user.length === 0) return false;
   
-  // Give unlimited credits to JMKUCZYNSKI (case insensitive)
-  if (user[0].username.toUpperCase() === 'JMKUCZYNSKI' || user[0].username.toUpperCase() === 'JMKUCZYNSKI2') {
+  // Give unlimited credits to special users (case insensitive)
+  const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+  if (unlimitedUsers.includes(user[0].username.toUpperCase())) {
     return true;
   }
   
@@ -71,10 +72,11 @@ async function checkCredits(userId: number | undefined, requiredTokens: number):
 
 async function deductCredits(userId: number, tokensUsed: number, action: string, description?: string): Promise<boolean> {
   try {
-    // Check if this is JMKUCZYNSKI - don't deduct credits for them (case insensitive)
+    // Check if this is an unlimited user - don't deduct credits for them (case insensitive)
     const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-    if (user.length > 0 && (user[0].username.toUpperCase() === 'JMKUCZYNSKI' || user[0].username.toUpperCase() === 'JMKUCZYNSKI2')) {
-      console.log('JMKUCZYNSKI detected - unlimited credits, no deduction');
+    const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+    if (user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase())) {
+      console.log(`${user[0].username} detected - unlimited credits, no deduction`);
       return true;
     }
     
