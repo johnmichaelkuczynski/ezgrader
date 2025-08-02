@@ -1138,35 +1138,34 @@ Return ONLY the JSON object, no additional text.
       // Check for markdown headings and remove them
       cleanResult = cleanResult.replace(/^#+\s+/gm, '');
       
-      // CREDIT SYSTEM: Apply preview logic for unregistered users
+      // CREDIT SYSTEM: Apply preview logic for users without sufficient credits
       let finalResponse = cleanResult;
       let creditsDeducted = 0;
       let isPreview = false;
 
-      if (!isRegistered || !hasCredits) {
-        if (isRegistered) {
-          return res.status(402).json({ 
-            error: 'Insufficient credits. Please purchase more credits to continue.',
-            requiredCredits: TOKEN_COSTS.grading,
-            action: 'grading'
-          });
-        }
-        // For unregistered users, provide preview
+      // Check if user is unlimited (gets full access always)
+      let isUnlimitedUser = false;
+      if (isRegistered) {
+        const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+        isUnlimitedUser = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
+      }
+
+      if (!isRegistered || (!hasCredits && !isUnlimitedUser)) {
+        // For unregistered users OR registered users without sufficient credits, provide preview
         finalResponse = generatePreview(cleanResult);
         isPreview = true;
-        console.log(`Generated preview for unregistered user. Preview length: ${finalResponse.length}`);
+        console.log(`Generated preview for ${!isRegistered ? 'unregistered' : 'registered but insufficient credits'} user. Preview length: ${finalResponse.length}`);
       } else {
-        // Deduct credits for registered users with sufficient credits
-        const deductionResult = await deductCredits(userId, TOKEN_COSTS.grading, 'grading', 'AI grading assignment');
-        if (deductionResult) {
-          creditsDeducted = TOKEN_COSTS.grading;
-          // Check if this is an unlimited user before logging deduction
-          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-          const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
-          const isUnlimited = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
-          if (!isUnlimited) {
+        // Deduct credits for registered users with sufficient credits (unless unlimited)
+        if (!isUnlimitedUser) {
+          const deductionResult = await deductCredits(userId, TOKEN_COSTS.grading, 'grading', 'AI grading assignment');
+          if (deductionResult) {
+            creditsDeducted = TOKEN_COSTS.grading;
             console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
           }
+        } else {
+          console.log(`Unlimited user ${req.session?.username} - no credit deduction`);
         }
       }
       
@@ -1370,35 +1369,34 @@ The grade for Submission 1 should be honest but typically in the 20-30 range for
       // Check for markdown headings and remove them
       cleanResult = cleanResult.replace(/^#+\s+/gm, '');
       
-      // CREDIT SYSTEM: Apply preview logic for unregistered users  
+      // CREDIT SYSTEM: Apply preview logic for users without sufficient credits
       let finalResponse = cleanResult;
       let creditsDeducted = 0;
       let isPreview = false;
 
-      if (!isRegistered || !hasCredits) {
-        if (isRegistered) {
-          return res.status(402).json({ 
-            error: 'Insufficient credits. Please purchase more credits to continue.',
-            requiredCredits: TOKEN_COSTS.comparison,
-            action: 'comparison'
-          });
-        }
-        // For unregistered users, provide preview
+      // Check if user is unlimited (gets full access always)
+      let isUnlimitedUser = false;
+      if (isRegistered) {
+        const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+        isUnlimitedUser = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
+      }
+
+      if (!isRegistered || (!hasCredits && !isUnlimitedUser)) {
+        // For unregistered users OR registered users without sufficient credits, provide preview
         finalResponse = generatePreview(cleanResult);
         isPreview = true;
-        console.log(`Generated comparison preview for unregistered user. Preview length: ${finalResponse.length}`);
+        console.log(`Generated comparison preview for ${!isRegistered ? 'unregistered' : 'registered but insufficient credits'} user. Preview length: ${finalResponse.length}`);
       } else {
-        // Deduct credits for registered users with sufficient credits
-        const deductionResult = await deductCredits(userId, TOKEN_COSTS.comparison, 'comparison', 'Assignment comparison');
-        if (deductionResult) {
-          creditsDeducted = TOKEN_COSTS.comparison;
-          // Check if this is an unlimited user before logging deduction
-          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-          const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
-          const isUnlimited = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
-          if (!isUnlimited) {
+        // Deduct credits for registered users with sufficient credits (unless unlimited)
+        if (!isUnlimitedUser) {
+          const deductionResult = await deductCredits(userId, TOKEN_COSTS.comparison, 'comparison', 'Assignment comparison');
+          if (deductionResult) {
+            creditsDeducted = TOKEN_COSTS.comparison;
             console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
           }
+        } else {
+          console.log(`Unlimited user ${req.session?.username} - no credit deduction`);
         }
       }
       
@@ -1665,35 +1663,34 @@ Be helpful, knowledgeable, and provide detailed responses. If the user asks you 
 
       const aiResponse = response.choices[0].message.content || "I apologize, but I couldn't generate a response. Please try again.";
       
-      // CREDIT SYSTEM: Apply preview logic for unregistered users
+      // CREDIT SYSTEM: Apply preview logic for users without sufficient credits
       let finalResponse = aiResponse;
       let creditsDeducted = 0;
       let isPreview = false;
 
-      if (!isRegistered || !hasCredits) {
-        if (isRegistered) {
-          return res.status(402).json({ 
-            error: 'Insufficient credits. Please purchase more credits to continue.',
-            requiredCredits: TOKEN_COSTS.chat,
-            action: 'chat'
-          });
-        }
-        // For unregistered users, provide preview
+      // Check if user is unlimited (gets full access always)
+      let isUnlimitedUser = false;
+      if (isRegistered) {
+        const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+        isUnlimitedUser = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
+      }
+
+      if (!isRegistered || (!hasCredits && !isUnlimitedUser)) {
+        // For unregistered users OR registered users without sufficient credits, provide preview
         finalResponse = generatePreview(aiResponse);
         isPreview = true;
-        console.log(`Generated chat preview for unregistered user. Preview length: ${finalResponse.length}`);
+        console.log(`Generated chat preview for ${!isRegistered ? 'unregistered' : 'registered but insufficient credits'} user. Preview length: ${finalResponse.length}`);
       } else {
-        // Deduct credits for registered users with sufficient credits
-        const deductionResult = await deductCredits(userId, TOKEN_COSTS.chat, 'chat', 'AI chat conversation');
-        if (deductionResult) {
-          creditsDeducted = TOKEN_COSTS.chat;
-          // Check if this is an unlimited user before logging deduction
-          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-          const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
-          const isUnlimited = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
-          if (!isUnlimited) {
+        // Deduct credits for registered users with sufficient credits (unless unlimited)
+        if (!isUnlimitedUser) {
+          const deductionResult = await deductCredits(userId, TOKEN_COSTS.chat, 'chat', 'AI chat conversation');
+          if (deductionResult) {
+            creditsDeducted = TOKEN_COSTS.chat;
             console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
           }
+        } else {
+          console.log(`Unlimited user ${req.session?.username} - no credit deduction`);
         }
       }
       
@@ -2411,35 +2408,34 @@ Continue from where it left off and provide a proper ending:`;
         .replace(/\n{3,}/g, '\n\n')          // Clean excessive newlines
         .trim();
 
-      // CREDIT SYSTEM: Apply preview logic for unregistered users
+      // CREDIT SYSTEM: Apply preview logic for users without sufficient credits
       let finalResponse = result;
       let creditsDeducted = 0;
       let isPreview = false;
 
-      if (!isRegistered || !hasCredits) {
-        if (isRegistered) {
-          return res.status(402).json({ 
-            error: 'Insufficient credits. Please purchase more credits to continue.',
-            requiredCredits: TOKEN_COSTS.perfectEssay,
-            action: 'perfect_essay'
-          });
-        }
-        // For unregistered users, provide preview
+      // Check if user is unlimited (gets full access always)
+      let isUnlimitedUser = false;
+      if (isRegistered) {
+        const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
+        isUnlimitedUser = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
+      }
+
+      if (!isRegistered || (!hasCredits && !isUnlimitedUser)) {
+        // For unregistered users OR registered users without sufficient credits, provide preview
         finalResponse = generatePreview(result);
         isPreview = true;
-        console.log(`Generated perfect answer preview for unregistered user. Preview length: ${finalResponse.length}`);
+        console.log(`Generated perfect answer preview for ${!isRegistered ? 'unregistered' : 'registered but insufficient credits'} user. Preview length: ${finalResponse.length}`);
       } else {
-        // Deduct credits for registered users with sufficient credits
-        const deductionResult = await deductCredits(userId, TOKEN_COSTS.perfectEssay, 'perfect_essay', 'Perfect assignment generation');
-        if (deductionResult) {
-          creditsDeducted = TOKEN_COSTS.perfectEssay;
-          // Check if this is an unlimited user before logging deduction
-          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-          const unlimitedUsers = ['JMKUCZYNSKI', 'JMKUCZYNSKI2', 'RANDYJOHNSON'];
-          const isUnlimited = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
-          if (!isUnlimited) {
+        // Deduct credits for registered users with sufficient credits (unless unlimited)
+        if (!isUnlimitedUser) {
+          const deductionResult = await deductCredits(userId, TOKEN_COSTS.perfectEssay, 'perfect_essay', 'Perfect assignment generation');
+          if (deductionResult) {
+            creditsDeducted = TOKEN_COSTS.perfectEssay;
             console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
           }
+        } else {
+          console.log(`Unlimited user ${req.session?.username} - no credit deduction`);
         }
       }
 
