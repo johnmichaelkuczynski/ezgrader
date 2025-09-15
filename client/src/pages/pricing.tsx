@@ -25,26 +25,38 @@ export default function Pricing() {
   const buyCredits = async (tier: string) => {
     setLoading(tier);
     try {
+      console.log('Starting checkout for tier:', tier);
+      console.log('Stripe environment key exists:', !!import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+      
       const r = await fetch('/api/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ priceTier: tier })
       });
-      const { id } = await r.json();
-      if (!id) { 
+      
+      console.log('Checkout API response status:', r.status);
+      const responseData = await r.json();
+      console.log('Checkout API response data:', responseData);
+      
+      if (!responseData.id) { 
         toast({
           title: "Error",
-          description: "Checkout init failed",
+          description: `Checkout failed: ${responseData.error || 'No session ID returned'}`,
           variant: "destructive",
         });
         setLoading(null);
         return; 
       }
       
+      console.log('Loading Stripe...');
       const stripe = await stripePromise;
+      console.log('Stripe loaded:', !!stripe);
+      
       if (stripe) {
-        const { error } = await stripe.redirectToCheckout({ sessionId: id });
+        console.log('Redirecting to checkout with session ID:', responseData.id);
+        const { error } = await stripe.redirectToCheckout({ sessionId: responseData.id });
         if (error) {
+          console.error('Stripe redirect error:', error);
           toast({
             title: "Error",
             description: error.message || "Failed to redirect to checkout",
@@ -53,6 +65,7 @@ export default function Pricing() {
           setLoading(null);
         }
       } else {
+        console.error('Stripe failed to load');
         toast({
           title: "Error", 
           description: "Stripe failed to load. Please refresh and try again.",
@@ -61,6 +74,7 @@ export default function Pricing() {
         setLoading(null);
       }
     } catch (error: any) {
+      console.error('Checkout error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to initiate payment",
