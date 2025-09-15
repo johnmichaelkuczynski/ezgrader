@@ -2184,7 +2184,7 @@ Continue seamlessly from where the previous part ended. Develop the main argumen
       // CREDIT SYSTEM: Check user authentication and credits
       const isRegistered = req.session?.userId !== undefined;
       const userId = req.session?.userId;
-      const hasCredits = isRegistered ? await checkCredits(userId, TOKEN_COSTS.perfectEssay) : false;
+      const hasCredits = isRegistered ? await checkCredits(userId, TOKEN_COSTS.perfect_essay) : false;
 
       console.log(`Perfect answer request - Registered: ${isRegistered}, User ID: ${userId}, Has credits: ${hasCredits}`);
 
@@ -2195,7 +2195,7 @@ Continue seamlessly from where the previous part ended. Develop the main argumen
       // Ensure minimum word count is met - add buffer for safety
       const targetWords = Math.max(requiredWords, 1000) + 500; // Larger buffer to ensure completion
 
-      let result: string;
+      let result: string = '';
       
       if (provider === 'deepseek') {
         // Use DeepSeek API directly
@@ -2429,9 +2429,9 @@ Continue from where it left off and provide a proper ending:`;
       } else {
         // Deduct credits for registered users with sufficient credits (unless unlimited)
         if (!isUnlimitedUser) {
-          const deductionResult = await deductCredits(userId, TOKEN_COSTS.perfectEssay, 'perfect_essay', 'Perfect assignment generation');
+          const deductionResult = await deductCredits(userId, TOKEN_COSTS.perfect_essay, 'perfect_essay', 'Perfect assignment generation');
           if (deductionResult) {
-            creditsDeducted = TOKEN_COSTS.perfectEssay;
+            creditsDeducted = TOKEN_COSTS.perfect_essay;
             console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
           }
         } else {
