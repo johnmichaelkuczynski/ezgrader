@@ -28,7 +28,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-// Credits helpers
+// Credits helpers - following exact instructions specification
 async function addCredits(userId: string, amount: number) {
   await pool.query(
     `INSERT INTO users (id, credits) VALUES ($1, $2)
@@ -1004,12 +1004,12 @@ Return ONLY the JSON object, no additional text.
       // If no grading instructions provided, use default
       const effectiveGradingText = gradingText || `Please grade this assignment fairly and thoroughly. Focus on correctness and completeness. Provide specific feedback to help the student improve.`;
 
-      // CREDIT SYSTEM: Check user authentication and credits
+      // CREDIT SYSTEM: Check user authentication and credits - Following exact instructions specification  
       const isRegistered = req.session?.userId !== undefined;
       const userId = req.session?.userId;
-      const hasCredits = isRegistered ? await checkCredits(userId, TOKEN_COSTS.grading) : false;
+      const userCredits = isRegistered ? await getCredits(String(userId)) : 0;
 
-      console.log(`Grading request - Registered: ${isRegistered}, User ID: ${userId}, Has credits: ${hasCredits}`);
+      console.log(`Grading request - Registered: ${isRegistered}, User ID: ${userId}, Credits: ${userCredits}`);
       
       // Select provider and model
       let effectiveProvider = provider;
@@ -1183,7 +1183,7 @@ Return ONLY the JSON object, no additional text.
       // Check for markdown headings and remove them
       cleanResult = cleanResult.replace(/^#+\s+/gm, '');
       
-      // CREDIT SYSTEM: Apply preview logic for users without sufficient credits
+      // CREDIT SYSTEM: Apply preview logic for users without sufficient credits - Following exact instructions specification
       let finalResponse = cleanResult;
       let creditsDeducted = 0;
       let isPreview = false;
@@ -1196,18 +1196,27 @@ Return ONLY the JSON object, no additional text.
         isUnlimitedUser = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
       }
 
-      if (!isRegistered || (!hasCredits && !isUnlimitedUser)) {
-        // For unregistered users OR registered users without sufficient credits, provide preview
+      if (!isRegistered || (userCredits === 0 && !isUnlimitedUser)) {
+        // For unregistered users OR registered users with 0 credits, provide preview
         finalResponse = generatePreview(cleanResult);
         isPreview = true;
-        console.log(`Generated preview for ${!isRegistered ? 'unregistered' : 'registered but insufficient credits'} user. Preview length: ${finalResponse.length}`);
+        console.log(`Generated preview for ${!isRegistered ? 'unregistered' : 'registered but 0 credits'} user. Preview length: ${finalResponse.length}`);
       } else {
-        // Deduct credits for registered users with sufficient credits (unless unlimited)
+        // Consume 1 credit for registered users with credits (unless unlimited)
         if (!isUnlimitedUser) {
-          const deductionResult = await deductCredits(userId, TOKEN_COSTS.grading, 'grading', 'AI grading assignment');
-          if (deductionResult) {
-            creditsDeducted = TOKEN_COSTS.grading;
-            console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+          try {
+            const remainingCredits = await consumeOneCredit(String(userId));
+            creditsDeducted = 1;
+            console.log(`Consumed 1 credit from user ${userId}. Remaining credits: ${remainingCredits}`);
+          } catch (error: any) {
+            if (error.message === 'no_credits') {
+              // If credit consumption fails, provide preview instead
+              finalResponse = generatePreview(cleanResult);
+              isPreview = true;
+              console.log(`User ${userId} ran out of credits during consumption, providing preview`);
+            } else {
+              throw error;
+            }
           }
         } else {
           console.log(`Unlimited user ${req.session?.username} - no credit deduction`);
@@ -1241,12 +1250,12 @@ Return ONLY the JSON object, no additional text.
         clearCache
       } = req.body;
 
-      // CREDIT SYSTEM: Check user authentication and credits
+      // CREDIT SYSTEM: Check user authentication and credits - Following exact instructions specification
       const isRegistered = req.session?.userId !== undefined;
       const userId = req.session?.userId;
-      const hasCredits = isRegistered ? await checkCredits(userId, TOKEN_COSTS.comparison) : false;
+      const userCredits = isRegistered ? await getCredits(String(userId)) : 0;
 
-      console.log(`Assignment comparison request - Registered: ${isRegistered}, User ID: ${userId}, Has credits: ${hasCredits}`);
+      console.log(`Assignment comparison request - Registered: ${isRegistered}, User ID: ${userId}, Credits: ${userCredits}`);
     
       // Extract submission data
       const submission1Text = typeof submission1 === 'object' && submission1 !== null && submission1.text 
@@ -1427,18 +1436,27 @@ The grade for Submission 1 should be honest but typically in the 20-30 range for
         isUnlimitedUser = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
       }
 
-      if (!isRegistered || (!hasCredits && !isUnlimitedUser)) {
-        // For unregistered users OR registered users without sufficient credits, provide preview
+      if (!isRegistered || (userCredits === 0 && !isUnlimitedUser)) {
+        // For unregistered users OR registered users with 0 credits, provide preview
         finalResponse = generatePreview(cleanResult);
         isPreview = true;
-        console.log(`Generated comparison preview for ${!isRegistered ? 'unregistered' : 'registered but insufficient credits'} user. Preview length: ${finalResponse.length}`);
+        console.log(`Generated comparison preview for ${!isRegistered ? 'unregistered' : 'registered but 0 credits'} user. Preview length: ${finalResponse.length}`);
       } else {
-        // Deduct credits for registered users with sufficient credits (unless unlimited)
+        // Consume 1 credit for registered users with credits (unless unlimited)
         if (!isUnlimitedUser) {
-          const deductionResult = await deductCredits(userId, TOKEN_COSTS.comparison, 'comparison', 'Assignment comparison');
-          if (deductionResult) {
-            creditsDeducted = TOKEN_COSTS.comparison;
-            console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+          try {
+            const remainingCredits = await consumeOneCredit(String(userId));
+            creditsDeducted = 1;
+            console.log(`Consumed 1 credit from user ${userId}. Remaining credits: ${remainingCredits}`);
+          } catch (error: any) {
+            if (error.message === 'no_credits') {
+              // If credit consumption fails, provide preview instead
+              finalResponse = generatePreview(cleanResult);
+              isPreview = true;
+              console.log(`User ${userId} ran out of credits during consumption, providing preview`);
+            } else {
+              throw error;
+            }
           }
         } else {
           console.log(`Unlimited user ${req.session?.username} - no credit deduction`);
@@ -2249,12 +2267,12 @@ Continue seamlessly from where the previous part ended. Develop the main argumen
         return res.status(400).json({ message: 'Assignment text is required' });
       }
 
-      // CREDIT SYSTEM: Check user authentication and credits
+      // CREDIT SYSTEM: Check user authentication and credits - Following exact instructions specification
       const isRegistered = req.session?.userId !== undefined;
       const userId = req.session?.userId;
-      const hasCredits = isRegistered ? await checkCredits(userId, TOKEN_COSTS.perfect_essay) : false;
+      const userCredits = isRegistered ? await getCredits(String(userId)) : 0;
 
-      console.log(`Perfect answer request - Registered: ${isRegistered}, User ID: ${userId}, Has credits: ${hasCredits}`);
+      console.log(`Perfect answer request - Registered: ${isRegistered}, User ID: ${userId}, Credits: ${userCredits}`);
 
       // Extract word count requirement from assignment
       const wordCountMatch = assignmentText.match(/(\d+)\s*words?/i);
@@ -2489,18 +2507,27 @@ Continue from where it left off and provide a proper ending:`;
         isUnlimitedUser = user.length > 0 && unlimitedUsers.includes(user[0].username.toUpperCase());
       }
 
-      if (!isRegistered || (!hasCredits && !isUnlimitedUser)) {
-        // For unregistered users OR registered users without sufficient credits, provide preview
+      if (!isRegistered || (userCredits === 0 && !isUnlimitedUser)) {
+        // For unregistered users OR registered users with 0 credits, provide preview
         finalResponse = generatePreview(result);
         isPreview = true;
-        console.log(`Generated perfect answer preview for ${!isRegistered ? 'unregistered' : 'registered but insufficient credits'} user. Preview length: ${finalResponse.length}`);
+        console.log(`Generated perfect answer preview for ${!isRegistered ? 'unregistered' : 'registered but 0 credits'} user. Preview length: ${finalResponse.length}`);
       } else {
-        // Deduct credits for registered users with sufficient credits (unless unlimited)
+        // Consume 1 credit for registered users with credits (unless unlimited)
         if (!isUnlimitedUser) {
-          const deductionResult = await deductCredits(userId, TOKEN_COSTS.perfect_essay, 'perfect_essay', 'Perfect assignment generation');
-          if (deductionResult) {
-            creditsDeducted = TOKEN_COSTS.perfect_essay;
-            console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
+          try {
+            const remainingCredits = await consumeOneCredit(String(userId));
+            creditsDeducted = 1;
+            console.log(`Consumed 1 credit from user ${userId}. Remaining credits: ${remainingCredits}`);
+          } catch (error: any) {
+            if (error.message === 'no_credits') {
+              // If credit consumption fails, provide preview instead
+              finalResponse = generatePreview(result);
+              isPreview = true;
+              console.log(`User ${userId} ran out of credits during consumption, providing preview`);
+            } else {
+              throw error;
+            }
           }
         } else {
           console.log(`Unlimited user ${req.session?.username} - no credit deduction`);
