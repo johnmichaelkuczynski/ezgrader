@@ -93,7 +93,7 @@ export default function ServiceStatus({ className }: ServiceStatusProps) {
         ) : (
           <div className="grid gap-3">
             <div className="flex items-center justify-between py-2 border-b">
-              <div className="font-medium">OpenAI</div>
+              <div className="font-medium">ZHI 1</div>
               <div className="flex items-center">
                 {getStatusIcon(status.openai)}
                 <span className="ml-2 text-sm">
@@ -103,7 +103,7 @@ export default function ServiceStatus({ className }: ServiceStatusProps) {
             </div>
             
             <div className="flex items-center justify-between py-2 border-b">
-              <div className="font-medium">Anthropic</div>
+              <div className="font-medium">ZHI 2</div>
               <div className="flex items-center">
                 {getStatusIcon(status.anthropic)}
                 <span className="ml-2 text-sm">
@@ -113,7 +113,7 @@ export default function ServiceStatus({ className }: ServiceStatusProps) {
             </div>
             
             <div className="flex items-center justify-between py-2 border-b">
-              <div className="font-medium">Perplexity</div>
+              <div className="font-medium">ZHI 4</div>
               <div className="flex items-center">
                 {getStatusIcon(status.perplexity)}
                 <span className="ml-2 text-sm">
