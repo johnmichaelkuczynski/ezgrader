@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Check, CreditCard } from "lucide-react";
+import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -63,6 +63,19 @@ export default function Pricing() {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
+        {/* Navigation Header */}
+        <div className="mb-8">
+          <Button 
+            variant="ghost" 
+            onClick={() => setLocation('/')}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+            data-testid="button-back-to-app"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back to App
+          </Button>
+        </div>
+        
         <div className="text-center mb-12">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Choose Your Credits</h1>
           <p className="text-lg text-gray-600">

@@ -488,19 +488,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.session?.userId || req.headers['x-user-id'];
       if (!userId) return res.status(401).json({ error: 'not_authenticated' });
 
-      const map: Record<string, { price: string | undefined; credits: number }> = {
-        '10': { price: process.env.PRICE_CREDITS_10, credits: 10 },
-        '50': { price: process.env.PRICE_CREDITS_50, credits: 50 },
-        '100': { price: process.env.PRICE_CREDITS_100, credits: 100 }
+      // Credit tier pricing - create line items directly 
+      const tiers: Record<string, { amount: number; credits: number; name: string }> = {
+        '10': { amount: 1000, credits: 10, name: '10 Credits' },    // $10.00
+        '50': { amount: 5000, credits: 50, name: '50 Credits' },    // $50.00  
+        '100': { amount: 10000, credits: 100, name: '100 Credits' } // $100.00
       };
-      const tier = map[req.body.priceTier];
-      if (!tier || !tier.price) return res.status(400).json({ error: 'bad_tier' });
+      
+      const tier = tiers[req.body.priceTier];
+      if (!tier) return res.status(400).json({ error: 'bad_tier' });
 
+      // Create checkout session with line item instead of price
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
-        line_items: [{ price: tier.price, quantity: 1 }],
-        success_url: `${process.env.APP_BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.APP_BASE_URL}/pricing`,
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: tier.name,
+              description: `${tier.credits} credits for Grading Pro AI services`
+            },
+            unit_amount: tier.amount,
+          },
+          quantity: 1,
+        }],
+        success_url: `${req.protocol}://${req.get('host')}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${req.protocol}://${req.get('host')}/pricing`,
         client_reference_id: String(userId),
         metadata: { userId: String(userId), credits: String(tier.credits) }
       });
