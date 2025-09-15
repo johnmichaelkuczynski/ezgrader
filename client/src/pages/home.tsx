@@ -896,20 +896,40 @@ export default function Home() {
                         />
                       </div>
 
-                      <Button
-                        onClick={handleGeneratePerfectAnswer}
-                        disabled={!perfectAssignmentText.trim() || isGeneratingPerfectAnswer}
-                        className="w-full bg-green-600 hover:bg-green-700"
-                      >
-                        {isGeneratingPerfectAnswer ? (
-                          <>
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                            Generating Perfect Answer...
-                          </>
-                        ) : (
-                          'Generate Perfect Assignment Answer'
-                        )}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleGeneratePerfectAnswer}
+                          disabled={!perfectAssignmentText.trim() || isGeneratingPerfectAnswer}
+                          className="flex-1 bg-green-600 hover:bg-green-700"
+                        >
+                          {isGeneratingPerfectAnswer ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Generating Perfect Answer...
+                            </>
+                          ) : (
+                            'Generate Perfect Assignment Answer'
+                          )}
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            setPerfectAssignmentText('');
+                            setPerfectAnswer(null);
+                            setPerfectAnswerAiDetection(null);
+                            setCritique('');
+                            toast({
+                              title: "Perfect Answer Generator Cleared",
+                              description: "All fields have been cleared.",
+                            });
+                          }}
+                          disabled={isGeneratingPerfectAnswer}
+                          variant="outline"
+                          className="px-4"
+                          data-testid="button-clear-perfect-answer"
+                        >
+                          Clear
+                        </Button>
+                      </div>
                       
                       {/* Progress Window - Shows during generation */}
                       {isGeneratingPerfectAnswer && (
