@@ -17,10 +17,12 @@ import { apiRequest } from "@/lib/queryClient";
 function Navigation() {
   const [location, setLocation] = useLocation();
   
-  const { data: user } = useQuery({
+  const { data } = useQuery({
     queryKey: ["/api/auth/me"],
     retry: false,
   });
+  
+  const user = data?.user;
 
   const handleLogout = async () => {
     try {
