@@ -482,6 +482,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // GET /api/whoami - Check authentication status
+  app.get('/api/whoami', (req: Request, res: Response) => {
+    const userId =
+      (req.session && (req.session.userId || req.session.sessionId)) ||
+      req.headers['x-user-id'] ||
+      null;
+    if (!userId) return res.status(200).json({ userId: null });
+    res.json({ userId });
+  });
+
   // POST /api/checkout  body: { priceTier: "10"|"50"|"100" }
   app.post('/api/checkout', async (req: Request, res: Response) => {
     try {

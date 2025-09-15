@@ -1,0 +1,95 @@
+TITLE: Fix “Checkout failed: not_authenticated” on Pricing
+
+DO ONLY THESE CHANGES.
+
+Server — add a whoami endpoint and accept the user id header
+File: server.js (same file with the Express app).
+
+// Add near other routes
+app.get('/api/whoami', (req, res) => {
+  const userId =
+    (req.session && (req.session.userId || req.session.sessionId)) ||
+    req.headers['x-user-id'] ||
+    null;
+  if (!userId) return res.status(200).json({ userId: null });
+  res.json({ userId });
+});
+
+
+Ensure your /api/checkout handler already accepts the header (as we wrote earlier):
+
+const userId = req.session?.userId || req.headers['x-user-id'];
+if (!userId) return res.status(401).json({ error: 'not_authenticated' });
+
+
+Client — send the user id before starting checkout
+File: the pricing page script (the one with buyCredits).
+
+Replace the function with this:
+
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+const stripe = Stripe("<?= process.env.STRIPE_PUBLISHABLE_KEY ?>");
+
+async function buyCredits(tier) {
+  // 1) Get logged-in user id (works even if cookies are blocked in iframes)
+  let userId = null;
+  try {
+    const who = await fetch('/api/whoami', { credentials: 'include' });
+    if (who.ok) {
+      const j = await who.json();
+      userId = j.userId || null;
+    }
+  } catch (e) {}
+
+  if (!userId) {
+    // Force real-page auth flow
+    window.location.assign('/signup'); // or '/login' if that’s your route
+    return;
+  }
+
+  // 2) Create checkout session and navigate
+  try {
+    const r = await fetch('/api/checkout', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': userId
+      },
+      body: JSON.stringify({ priceTier: tier })
+    });
+    const data = await r.json();
+
+    if (data.url) {
+      window.location.assign(data.url); // preferred
+      return;
+    }
+    if (data.id) {
+      const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
+      if (error) alert(error.message);
+      return;
+    }
+    alert('Checkout init failed');
+  } catch (e) {
+    alert(e && e.message ? e.message : 'Checkout error');
+  }
+}
+</script>
+
+
+Nav button wiring
+Make sure your “Purchase Credits” buttons call buyCredits('10'), buyCredits('50'), buyCredits('100').
+
+Auth sanity
+
+If your app shows a username in the navbar (e.g., “BISMARK”) you should have a server session; the /api/whoami route surfaces that id.
+
+If /api/whoami returns {userId:null}, you are not logged in in that browser tab — the redirect to /signup is expected.
+
+Retest
+
+Open the public HTTPS URL in a normal tab (not the Replit preview iframe).
+
+Click a plan → should either send you to /signup (if not logged in) or to Stripe Checkout without the “not_authenticated” error.
+
+END.

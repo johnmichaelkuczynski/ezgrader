@@ -24,72 +24,73 @@ export default function Pricing() {
 
   const buyCredits = async (tier: string) => {
     setLoading(tier);
+    
+    // 1) Get logged-in user id (works even if cookies are blocked in iframes)
+    let userId = null;
     try {
-      console.log('Starting checkout for tier:', tier);
-      console.log('Stripe environment key exists:', !!import.meta.env.VITE_STRIPE_PUBLIC_KEY);
-      
+      const who = await fetch('/api/whoami', { credentials: 'include' });
+      if (who.ok) {
+        const j = await who.json();
+        userId = j.userId || null;
+      }
+    } catch (e) {
+      console.error('Failed to check authentication:', e);
+    }
+
+    if (!userId) {
+      // Force real-page auth flow
+      setLocation('/login');
+      setLoading(null);
+      return;
+    }
+
+    // 2) Create checkout session and navigate
+    try {
       const r = await fetch('/api/checkout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': String(userId)
+        },
         body: JSON.stringify({ priceTier: tier })
       });
-      
-      console.log('Checkout API response status:', r.status);
-      const responseData = await r.json();
-      console.log('Checkout API response data:', responseData);
-      
-      if (!responseData.id) { 
-        toast({
-          title: "Error",
-          description: `Checkout failed: ${responseData.error || 'No session ID returned'}`,
-          variant: "destructive",
-        });
-        setLoading(null);
-        return; 
+      const data = await r.json();
+
+      if (data.url) {
+        window.location.assign(data.url);
+        return;
       }
-      
-      console.log('Loading Stripe...');
-      const stripe = await stripePromise;
-      console.log('Stripe loaded:', !!stripe);
-      
-      if (stripe) {
-        console.log('Redirecting to checkout with session ID:', responseData.id);
-        try {
-          const result = await stripe.redirectToCheckout({ sessionId: responseData.id });
-          console.log('Stripe redirect result:', result);
-          if (result.error) {
-            console.error('Stripe redirect error:', result.error);
+      if (data.id) {
+        const stripe = await stripePromise;
+        if (stripe) {
+          const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
+          if (error) {
             toast({
               title: "Error",
-              description: result.error.message || "Failed to redirect to checkout",
+              description: error.message || "Failed to redirect to checkout",
               variant: "destructive",
             });
-            setLoading(null);
           }
-          // If successful, redirectToCheckout will redirect the page and this code won't execute
-        } catch (redirectError: any) {
-          console.error('Stripe redirect exception:', redirectError);
+        } else {
           toast({
-            title: "Error", 
-            description: redirectError.message || "Failed to redirect to Stripe checkout",
+            title: "Error",
+            description: "Stripe failed to load. Please refresh and try again.",
             variant: "destructive",
           });
-          setLoading(null);
         }
-      } else {
-        console.error('Stripe failed to load');
-        toast({
-          title: "Error", 
-          description: "Stripe failed to load. Please refresh and try again.",
-          variant: "destructive",
-        });
         setLoading(null);
+        return;
       }
-    } catch (error: any) {
-      console.error('Checkout error:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to initiate payment",
+        description: "Checkout init failed",
+        variant: "destructive",
+      });
+      setLoading(null);
+    } catch (e: any) {
+      toast({
+        title: "Error",
+        description: e && e.message ? e.message : 'Checkout error',
         variant: "destructive",
       });
       setLoading(null);
