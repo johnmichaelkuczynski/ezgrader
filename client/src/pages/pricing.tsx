@@ -1,10 +1,10 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Check, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import PayPalButton from "@/components/PayPalButton";
 
 const pricingTiers = [
   { id: "5", price: 5, tokens: 5000, popular: false },
@@ -15,25 +15,17 @@ const pricingTiers = [
 
 export default function Pricing() {
   const [loading, setLoading] = useState<string | null>(null);
-  const [paypalData, setPaypalData] = useState<{[key: string]: any}>({});
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const handlePurchase = async (tier: string) => {
+  const handleStripeCheckout = async (tier: string) => {
     setLoading(tier);
     try {
-      const response = await apiRequest("POST", "/api/create-paypal-order", { tier });
+      const response = await apiRequest("POST", "/api/create-payment-intent", { tier });
       
-      // Store PayPal data for this tier
-      setPaypalData(prev => ({
-        ...prev,
-        [tier]: {
-          amount: response.amount,
-          currency: response.currency,
-          intent: response.intent
-        }
-      }));
+      // Redirect to Stripe checkout page
+      setLocation(`/checkout?client_secret=${response.clientSecret}`);
       
-      setLoading(null);
     } catch (error: any) {
       toast({
         title: "Error",
@@ -92,34 +84,25 @@ export default function Pricing() {
                   </div>
                 </div>
                 
-                {paypalData[tier.id] ? (
-                  <div className="w-full">
-                    <PayPalButton 
-                      amount={paypalData[tier.id].amount}
-                      currency={paypalData[tier.id].currency}
-                      intent={paypalData[tier.id].intent}
-                    />
-                  </div>
-                ) : (
-                  <Button 
-                    className="w-full" 
-                    onClick={() => handlePurchase(tier.id)}
-                    disabled={loading === tier.id}
-                    variant={tier.popular ? "default" : "outline"}
-                  >
-                    {loading === tier.id ? (
-                      <div className="flex items-center">
-                        <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2" />
-                        Preparing PayPal...
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Pay with PayPal
-                      </div>
-                    )}
-                  </Button>
-                )}
+                <Button 
+                  className="w-full" 
+                  onClick={() => handleStripeCheckout(tier.id)}
+                  disabled={loading === tier.id}
+                  variant={tier.popular ? "default" : "outline"}
+                  data-testid={`button-purchase-${tier.id}`}
+                >
+                  {loading === tier.id ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2" />
+                      Preparing...
+                    </div>
+                  ) : (
+                    <div className="flex items-center">
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Purchase Credits
+                    </div>
+                  )}
+                </Button>
               </CardContent>
             </Card>
           ))}
