@@ -1,7 +1,10 @@
 import type { Express, Request, Response, NextFunction } from "express";
+import express from "express";
 import { createServer, type Server } from "http";
 import bcrypt from 'bcryptjs';
 import Stripe from 'stripe';
+import pg from 'pg';
+const { Pool } = pg;
 import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage } from "@shared/schema";
 import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
@@ -22,6 +25,28 @@ import { eq } from "drizzle-orm";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 });
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+// Credits helpers
+async function addCredits(userId: string, amount: number) {
+  await pool.query(
+    `INSERT INTO users (id, credits) VALUES ($1, $2)
+     ON CONFLICT (id) DO UPDATE SET credits = users.credits + EXCLUDED.credits`,
+    [userId, amount]
+  );
+}
+
+async function getCredits(userId: string): Promise<number> {
+  const r = await pool.query('SELECT credits FROM users WHERE id=$1', [userId]);
+  return r.rows[0]?.credits || 0;
+}
+
+async function consumeOneCredit(userId: string) {
+  const r = await pool.query('UPDATE users SET credits = credits - 1 WHERE id=$1 AND credits > 0 RETURNING credits', [userId]);
+  if (r.rowCount === 0) throw new Error('no_credits');
+  return r.rows[0].credits;
+}
 
 // Extend session type
 declare module 'express-session' {
@@ -457,65 +482,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Stripe payment routes
-  app.post('/api/create-payment-intent', async (req: Request, res: Response) => {
+  // POST /api/checkout  body: { priceTier: "10"|"50"|"100" }
+  app.post('/api/checkout', async (req: Request, res: Response) => {
     try {
-      const { tier } = purchaseSchema.parse(req.body);
-      const pricing = TOKEN_PRICING[tier];
-      
-      if (!pricing) {
-        return res.status(400).json({ error: 'Invalid tier' });
-      }
+      const userId = req.session?.userId || req.headers['x-user-id'];
+      if (!userId) return res.status(401).json({ error: 'not_authenticated' });
 
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: pricing.price * 100, // Convert dollars to cents for Stripe
-        currency: 'usd',
-        metadata: {
-          tier,
-          tokens: pricing.tokens.toString(),
-          userId: req.session?.userId?.toString() || 'unregistered',
-        },
+      const map: Record<string, { price: string | undefined; credits: number }> = {
+        '10': { price: process.env.PRICE_CREDITS_10, credits: 10 },
+        '50': { price: process.env.PRICE_CREDITS_50, credits: 50 },
+        '100': { price: process.env.PRICE_CREDITS_100, credits: 100 }
+      };
+      const tier = map[req.body.priceTier];
+      if (!tier || !tier.price) return res.status(400).json({ error: 'bad_tier' });
+
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        line_items: [{ price: tier.price, quantity: 1 }],
+        success_url: `${process.env.APP_BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.APP_BASE_URL}/pricing`,
+        client_reference_id: String(userId),
+        metadata: { userId: String(userId), credits: String(tier.credits) }
       });
 
-      res.json({ clientSecret: paymentIntent.client_secret });
-    } catch (error: any) {
-      console.error('Payment intent creation failed:', error);
-      res.status(500).json({ error: error.message });
+      return res.json({ id: session.id });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: 'checkout_failed' });
     }
   });
 
-  app.post('/api/webhook/stripe', async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'] as string;
+  // RAW body ONLY for /webhook
+  app.post('/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+    const sig = req.headers['stripe-signature'];
+    let event;
 
     try {
-      const event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET_EZGRADER!);
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig as string,
+        process.env.STRIPE_WEBHOOK_SECRET_EZGRADER!
+      );
+    } catch (err: any) {
+      console.error('Webhook signature verification failed', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
 
-      if (event.type === 'payment_intent.succeeded') {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        const { tier, tokens, userId } = paymentIntent.metadata;
+    try {
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object;
+        const userId = session.client_reference_id || session.metadata?.userId;
+        const credits = parseInt(session.metadata?.credits || '0', 10);
 
-        if (userId && userId !== 'unregistered') {
-          // Add credits to user
-          await db.update(users)
-            .set({ credits: users.credits + parseInt(tokens) })
-            .where(eq(users.id, parseInt(userId)));
-
-          // Record purchase
-          await db.insert(purchases).values({
-            userId: parseInt(userId),
-            stripePaymentIntentId: paymentIntent.id,
-            amount: paymentIntent.amount,
-            tokensAdded: parseInt(tokens),
-            status: 'completed',
-          });
+        if (userId && credits > 0) {
+          await addCredits(userId, credits);
         }
       }
-
       res.json({ received: true });
-    } catch (error: any) {
-      console.error('Webhook error:', error);
-      res.status(400).send(`Webhook Error: ${error.message}`);
+    } catch (err) {
+      console.error('Webhook handler error', err);
+      res.status(500).send('handler_error');
     }
+  });
+
+  // Credits read endpoint
+  app.get('/api/me/credits', async (req: Request, res: Response) => {
+    const userId = req.session?.userId || req.headers['x-user-id'];
+    if (!userId) return res.status(401).json({ error: 'not_authenticated' });
+    const credits = await getCredits(String(userId));
+    res.json({ credits });
   });
   
   // Assignment Attachment Routes

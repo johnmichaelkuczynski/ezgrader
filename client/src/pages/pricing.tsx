@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,11 +6,13 @@ import { Check, CreditCard } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
+// Load Stripe
+const stripePromise = (window as any).Stripe ? Promise.resolve((window as any).Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || import.meta.env.VITE_STRIPE_PUBLIC_KEY)) : null;
+
 const pricingTiers = [
-  { id: "5", price: 5, tokens: 5000, popular: false },
-  { id: "10", price: 10, tokens: 20000, popular: true },
-  { id: "100", price: 100, tokens: 500000, popular: false },
-  { id: "1000", price: 1000, tokens: 10000000, popular: false },
+  { id: "10", price: 10, credits: 10, popular: false },
+  { id: "50", price: 50, credits: 50, popular: true },
+  { id: "100", price: 100, credits: 100, popular: false },
 ];
 
 export default function Pricing() {
@@ -18,14 +20,36 @@ export default function Pricing() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const handleStripeCheckout = async (tier: string) => {
+  const buyCredits = async (tier: string) => {
     setLoading(tier);
     try {
-      const data = await apiRequest("POST", "/api/create-payment-intent", { tier }) as { clientSecret: string };
+      const r = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceTier: tier })
+      });
+      const { id } = await r.json();
+      if (!id) { 
+        toast({
+          title: "Error",
+          description: "Checkout init failed",
+          variant: "destructive",
+        });
+        setLoading(null);
+        return; 
+      }
       
-      // Redirect to Stripe checkout page
-      setLocation(`/checkout?client_secret=${data.clientSecret}`);
-      
+      const stripe = await stripePromise;
+      if (stripe) {
+        await stripe.redirectToCheckout({ sessionId: id });
+      } else {
+        toast({
+          title: "Error",
+          description: "Stripe not loaded",
+          variant: "destructive",
+        });
+        setLoading(null);
+      }
     } catch (error: any) {
       toast({
         title: "Error",
@@ -60,7 +84,7 @@ export default function Pricing() {
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl font-bold">${tier.price}</CardTitle>
                 <CardDescription>
-                  {tier.tokens.toLocaleString()} tokens
+                  {tier.credits} credits
                 </CardDescription>
               </CardHeader>
               
@@ -86,7 +110,7 @@ export default function Pricing() {
                 
                 <Button 
                   className="w-full" 
-                  onClick={() => handleStripeCheckout(tier.id)}
+                  onClick={() => buyCredits(tier.id)}
                   disabled={loading === tier.id}
                   variant={tier.popular ? "default" : "outline"}
                   data-testid={`button-purchase-${tier.id}`}

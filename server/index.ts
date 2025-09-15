@@ -17,8 +17,11 @@ app.use(session({
   }
 }));
 
-// Significantly increase payload limit to handle extremely large documents (up to 400K words)
-app.use(express.json({ limit: '200mb' }));
+// JSON for everything EXCEPT the webhook
+app.use((req, res, next) => {
+  if (req.originalUrl === '/webhook') return next();
+  express.json({ limit: '200mb' })(req, res, next);
+});
 app.use(express.urlencoded({ extended: false, limit: '200mb' }));
 
 app.use((req, res, next) => {

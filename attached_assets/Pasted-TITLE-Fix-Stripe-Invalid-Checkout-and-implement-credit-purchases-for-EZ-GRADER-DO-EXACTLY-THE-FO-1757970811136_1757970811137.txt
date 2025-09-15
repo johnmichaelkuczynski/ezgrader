@@ -1,0 +1,223 @@
+TITLE: Fix Stripe “Invalid Checkout” and implement credit purchases for EZ GRADER
+
+DO EXACTLY THE FOLLOWING—NO EXTRA CHANGES.
+
+Environment (Replit → Secrets)
+
+Add/confirm:
+
+STRIPE_SECRET_KEY = your test secret key (sk_test_...)
+
+STRIPE_PUBLISHABLE_KEY = your test publishable key (pk_test_...)
+
+STRIPE_WEBHOOK_SECRET_EZGRADER = the webhook signing secret for https://s-5-student-grade-tracker-dascalavi82.replit.app/webhook
+
+APP_BASE_URL = https://s-5-student-grade-tracker-dascalavi82.replit.app
+
+PRICE_CREDITS_10 = Stripe Price ID for the 10-credit pack (e.g., price_...)
+
+PRICE_CREDITS_50 = Stripe Price ID for the 50-credit pack
+
+PRICE_CREDITS_100 = Stripe Price ID for the 100-credit pack
+
+DATABASE_URL = Neon connection string (already used by the app)
+
+Packages
+
+Ensure these are installed and in package.json:
+
+"stripe": "^16.0.0"
+
+"express": "^4.19.2"
+
+"pg": "^8.11.5"
+
+If missing, install and restart.
+
+Database
+
+Create/ensure a users table with a credit balance. Run this SQL once (Neon):
+
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  credit_balance INT NOT NULL DEFAULT 0
+);
+
+
+Server wiring (in root server.js — if the project uses index.js instead, apply these edits to that file and remove any duplicate Stripe routes)
+
+At the very top:
+
+const express = require('express');
+const Stripe = require('stripe');
+const { Pool } = require('pg');
+
+const app = express();
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+
+Body parsers: put these in this exact order
+
+// JSON for everything EXCEPT the webhook
+app.use((req, res, next) => {
+  if (req.originalUrl === '/webhook') return next();
+  express.json()(req, res, next);
+});
+
+
+Credits helpers (below the parsers):
+
+async function addCredits(userId, amount) {
+  await pool.query(
+    `INSERT INTO users (id, credit_balance) VALUES ($1, $2)
+     ON CONFLICT (id) DO UPDATE SET credit_balance = users.credit_balance + EXCLUDED.credit_balance`,
+    [userId, amount]
+  );
+}
+
+async function getCredits(userId) {
+  const r = await pool.query('SELECT credit_balance FROM users WHERE id=$1', [userId]);
+  return r.rows[0]?.credit_balance || 0;
+}
+
+
+Checkout endpoint (creates Checkout Session and returns session.id). Place this before the webhook route:
+
+// POST /api/checkout  body: { priceTier: "10"|"50"|"100" }
+app.post('/api/checkout', async (req, res) => {
+  try {
+    const userId = req.session?.userId || req.headers['x-user-id']; // use your existing session user id
+    if (!userId) return res.status(401).json({ error: 'not_authenticated' });
+
+    const map = {
+      '10': { price: process.env.PRICE_CREDITS_10, credits: 10 },
+      '50': { price: process.env.PRICE_CREDITS_50, credits: 50 },
+      '100': { price: process.env.PRICE_CREDITS_100, credits: 100 }
+    };
+    const tier = map[req.body.priceTier];
+    if (!tier || !tier.price) return res.status(400).json({ error: 'bad_tier' });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{ price: tier.price, quantity: 1 }],
+      success_url: `${process.env.APP_BASE_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.APP_BASE_URL}/pricing`,
+      client_reference_id: userId,
+      metadata: { userId, credits: String(tier.credits) }
+    });
+
+    return res.json({ id: session.id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: 'checkout_failed' });
+  }
+});
+
+
+Webhook route (must use raw body and verify signature). Put this after the checkout route:
+
+// RAW body ONLY for /webhook
+app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET_EZGRADER
+    );
+  } catch (err) {
+    console.error('Webhook signature verification failed', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const userId = session.client_reference_id || session.metadata?.userId;
+      const credits = parseInt(session.metadata?.credits || '0', 10);
+
+      if (userId && credits > 0) {
+        await addCredits(userId, credits);
+      }
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Webhook handler error', err);
+    res.status(500).send('handler_error');
+  }
+});
+
+
+Credits read endpoint (used by UI to gate full output):
+
+app.get('/api/me/credits', async (req, res) => {
+  const userId = req.session?.userId || req.headers['x-user-id'];
+  if (!userId) return res.status(401).json({ error: 'not_authenticated' });
+  const credits = await getCredits(userId);
+  res.json({ credits });
+});
+
+
+Client (pricing page and success page)
+
+On the pricing page button(s), call the checkout endpoint and redirect using the returned session.id:
+
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+const stripe = Stripe("<?= process.env.STRIPE_PUBLISHABLE_KEY ?>");
+
+async function buyCredits(tier){  // "10" | "50" | "100"
+  const r = await fetch('/api/checkout', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ priceTier: tier })
+  });
+  const { id } = await r.json();
+  if (!id) { alert('Checkout init failed'); return; }
+  await stripe.redirectToCheckout({ sessionId: id });
+}
+</script>
+
+
+Success page at /checkout/success:
+
+Do not try to reconstruct a session. Just show a success message.
+
+If you must display details, read session_id from location.search and hit a small server helper to fetch it from Stripe; otherwise, leave it simple.
+
+Most important: the presence of ?session_id= in the URL confirms the fix and prevents the “Invalid Checkout / No payment session found” page.
+
+Gating the full output
+
+Wherever the app delivers the full grade/comments, add a guard:
+
+Call GET /api/me/credits. If credits == 0 → show preview + a “Buy credits” CTA (links to /pricing).
+
+On successful grading, decrement credits by 1 (server-side) and return the full output. Add a server function:
+
+async function consumeOneCredit(userId) {
+  const r = await pool.query('UPDATE users SET credit_balance = credit_balance - 1 WHERE id=$1 AND credit_balance > 0 RETURNING credit_balance', [userId]);
+  if (r.rowCount === 0) throw new Error('no_credits');
+}
+
+
+Call consumeOneCredit(userId) exactly once per full output.
+
+Stripe Dashboard settings (you don’t need to change code for this)
+
+Ensure the endpoint https://s-5-student-grade-tracker-dascalavi82.replit.app/webhook is active in Test mode and subscribed to checkout.session.completed.
+
+Copy the signing secret from that endpoint into STRIPE_WEBHOOK_SECRET_EZGRADER.
+
+If/when switching to Live, duplicate everything with live keys and the live webhook secret.
+
+Regression checks
+
+Start the app. Open /pricing. Click each plan → you should be redirected to Stripe Checkout. After payment, you are redirected to /checkout/success?session_id=cs_test_.... Webhook must return 2xx and credit balance must increase accordingly.
+
+Open the full-output route with 0 credits → preview only. Buy credits → refresh → full output unlocked and credits decremented by 1.
+
+END.

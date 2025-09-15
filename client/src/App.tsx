@@ -12,6 +12,7 @@ import Register from "@/pages/register";
 import Pricing from "@/pages/pricing";
 import Checkout from "@/pages/checkout";
 import Success from "@/pages/success";
+import CheckoutSuccess from "@/pages/checkout-success";
 import { apiRequest } from "@/lib/queryClient";
 
 function Navigation() {
@@ -107,6 +108,7 @@ function Router() {
         <Route path="/register" component={Register} />
         <Route path="/pricing" component={Pricing} />
         <Route path="/checkout" component={Checkout} />
+        <Route path="/checkout/success" component={CheckoutSuccess} />
         <Route path="/success" component={Success} />
         <Route component={NotFound} />
       </Switch>
