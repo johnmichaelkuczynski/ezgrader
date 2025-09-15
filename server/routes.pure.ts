@@ -34,6 +34,16 @@ declare module 'express-session' {
       price: number;
       userId?: number;
     };
+    sessionDrafts?: {
+      latestPerfectAnswer?: {
+        fullAnswer: string;
+        assignmentText: string;
+        gradeLevel: string;
+        provider: string;
+        model: string;
+        timestamp: string; // Store as ISO string for serialization
+      };
+    };
   }
 }
 
@@ -458,7 +468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: pricing.price,
+        amount: pricing.price * 100, // Convert dollars to cents for Stripe
         currency: 'usd',
         metadata: {
           tier,
@@ -2153,10 +2163,33 @@ Continue seamlessly from where the previous part ended. Develop the main argumen
         }
       }
 
+      // Clean the fullAnswer
+      const cleanedAnswer = cleanMarkdownFormatting(fullAnswer);
+      
+      // Store full answer in session for retrieval after registration/payment
+      try {
+        if (!req.session.sessionDrafts) {
+          req.session.sessionDrafts = {};
+        }
+        
+        req.session.sessionDrafts.latestPerfectAnswer = {
+          fullAnswer: cleanedAnswer,
+          assignmentText,
+          gradeLevel: gradeLevel || 'undergraduate_regular',
+          provider: provider || 'deepseek',
+          model: model || 'deepseek-chat',
+          timestamp: new Date().toISOString()
+        };
+        
+        console.log('Perfect answer saved to session storage');
+      } catch (error) {
+        console.error('Error saving to session storage:', error);
+      }
+
       // Send completion signal
       res.write(`data: ${JSON.stringify({ 
         type: 'complete', 
-        fullText: fullAnswer,
+        fullText: cleanedAnswer,
         grade: '100/100',
         letterGrade: 'A+'
       })}\n\n`);
@@ -2439,6 +2472,19 @@ Continue from where it left off and provide a proper ending:`;
         }
       }
 
+      // Store full answer in session for retrieval after registration/payment
+      if (!req.session.sessionDrafts) {
+        req.session.sessionDrafts = {};
+      }
+      req.session.sessionDrafts.latestPerfectAnswer = {
+        fullAnswer: result, // Store complete answer before preview truncation
+        assignmentText,
+        gradeLevel,
+        timestamp: new Date().toISOString(), // Store as ISO string for serialization
+        provider,
+        model
+      };
+
       res.json({ 
         perfectAnswer: finalResponse,
         grade: '100/100',
@@ -2654,6 +2700,56 @@ Continue from where it left off and provide a proper ending:`;
   // PayPal purchase completion route - DISABLED
   app.post('/api/complete-paypal-purchase', async (req: Request, res: Response) => {
     res.status(503).json({ error: 'PayPal payment option is temporarily unavailable. Please use Stripe.' });
+  });
+
+  // Session draft retrieval endpoint
+  app.get('/api/session-draft', async (req: Request, res: Response) => {
+    try {
+      const sessionDrafts = req.session?.sessionDrafts || {};
+      
+      // Return the latest perfect answer if available
+      if (sessionDrafts.latestPerfectAnswer) {
+        const draft = sessionDrafts.latestPerfectAnswer;
+        
+        // Check if draft is recent (within last 24 hours)
+        const draftAge = new Date().getTime() - new Date(draft.timestamp).getTime();
+        const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+        
+        if (draftAge < maxAge) {
+          res.json({
+            hasDraft: true,
+            perfectAnswer: draft.fullAnswer,
+            assignmentText: draft.assignmentText,
+            gradeLevel: draft.gradeLevel,
+            provider: draft.provider,
+            model: draft.model,
+            timestamp: draft.timestamp
+          });
+        } else {
+          // Clear expired draft
+          delete req.session.sessionDrafts.latestPerfectAnswer;
+          res.json({ hasDraft: false });
+        }
+      } else {
+        res.json({ hasDraft: false });
+      }
+    } catch (error) {
+      console.error('Error retrieving session draft:', error);
+      res.status(500).json({ error: 'Failed to retrieve session draft' });
+    }
+  });
+
+  // Clear session draft endpoint
+  app.post('/api/clear-session-draft', async (req: Request, res: Response) => {
+    try {
+      if (req.session?.sessionDrafts?.latestPerfectAnswer) {
+        delete req.session.sessionDrafts.latestPerfectAnswer;
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error clearing session draft:', error);
+      res.status(500).json({ error: 'Failed to clear session draft' });
+    }
   });
 
   return httpServer;

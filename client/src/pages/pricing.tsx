@@ -21,10 +21,10 @@ export default function Pricing() {
   const handleStripeCheckout = async (tier: string) => {
     setLoading(tier);
     try {
-      const response = await apiRequest("POST", "/api/create-payment-intent", { tier });
+      const data = await apiRequest("POST", "/api/create-payment-intent", { tier }) as { clientSecret: string };
       
       // Redirect to Stripe checkout page
-      setLocation(`/checkout?client_secret=${response.clientSecret}`);
+      setLocation(`/checkout?client_secret=${data.clientSecret}`);
       
     } catch (error: any) {
       toast({

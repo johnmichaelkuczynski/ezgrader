@@ -70,6 +70,125 @@ export default function Home() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Session draft restoration function
+  const checkAndRestoreSessionDraft = async () => {
+    let restoredFromSession = false;
+    
+    try {
+      const response = await fetch('/api/session-draft');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.hasDraft) {
+          // Restore the perfect answer from session
+          setPerfectAnswer(data.perfectAnswer);
+          setPerfectAssignmentText(data.assignmentText);
+          
+          // Store in localStorage as backup
+          localStorage.setItem('draftPerfectAnswer', JSON.stringify({
+            perfectAnswer: data.perfectAnswer,
+            assignmentText: data.assignmentText,
+            timestamp: data.timestamp
+          }));
+          
+          restoredFromSession = true;
+          
+          // Clear session draft to prevent repeated restores
+          try {
+            await fetch('/api/clear-session-draft', { method: 'POST' });
+            console.log('Session draft cleared after successful restoration');
+          } catch (clearError) {
+            console.error('Error clearing session draft:', clearError);
+          }
+          
+          toast({
+            title: "Draft Restored",
+            description: "Your previously generated answer has been restored.",
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error checking session draft:', error);
+    }
+    
+    // Always check localStorage if we didn't restore from session
+    if (!restoredFromSession) {
+      try {
+        const localDraft = localStorage.getItem('draftPerfectAnswer');
+        if (localDraft) {
+          const draftData = JSON.parse(localDraft);
+          const draftAge = new Date().getTime() - new Date(draftData.timestamp).getTime();
+          const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+          
+          if (draftAge < maxAge) {
+            setPerfectAnswer(draftData.perfectAnswer);
+            setPerfectAssignmentText(draftData.assignmentText);
+            
+            toast({
+              title: "Draft Restored",
+              description: "Your previously generated answer has been restored from local storage.",
+            });
+          } else {
+            localStorage.removeItem('draftPerfectAnswer');
+          }
+        }
+      } catch (localError) {
+        console.error('Error restoring from localStorage:', localError);
+      }
+    }
+  };
+
+  // Check for authentication and restore drafts on component mount
+  useEffect(() => {
+    const checkAuthAndRestore = async () => {
+      let isAuthenticated = false;
+      
+      try {
+        const authResponse = await fetch('/api/auth/me');
+        if (authResponse.ok) {
+          isAuthenticated = true;
+          // User is authenticated, check for session drafts first
+          await checkAndRestoreSessionDraft();
+        } else if (authResponse.status === 401) {
+          // Not authenticated, but that's expected for logged-out users
+          console.log('User not authenticated, skipping session draft check');
+        } else {
+          console.warn('Auth check failed with status:', authResponse.status);
+        }
+      } catch (error) {
+        console.error('Error checking auth status:', error);
+      }
+      
+      // For non-authenticated users or if session restore failed, 
+      // still check localStorage as fallback
+      if (!isAuthenticated) {
+        try {
+          const localDraft = localStorage.getItem('draftPerfectAnswer');
+          if (localDraft) {
+            const draftData = JSON.parse(localDraft);
+            const draftAge = new Date().getTime() - new Date(draftData.timestamp).getTime();
+            const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+            
+            if (draftAge < maxAge) {
+              setPerfectAnswer(draftData.perfectAnswer);
+              setPerfectAssignmentText(draftData.assignmentText);
+              
+              toast({
+                title: "Draft Restored", 
+                description: "Your previously generated answer has been restored from local storage.",
+              });
+            } else {
+              localStorage.removeItem('draftPerfectAnswer');
+            }
+          }
+        } catch (localError) {
+          console.error('Error restoring from localStorage (non-auth):', localError);
+        }
+      }
+    };
+    
+    checkAuthAndRestore();
+  }, []);
+
   // Function to clear all fields (New Assignment)
   const handleNewAssignment = () => {
     setAssignmentText('');
