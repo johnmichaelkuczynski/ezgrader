@@ -6,8 +6,10 @@ import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-// Load Stripe
-const stripePromise = (window as any).Stripe ? Promise.resolve((window as any).Stripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || import.meta.env.VITE_STRIPE_PUBLIC_KEY)) : null;
+// Load Stripe properly using loadStripe
+import { loadStripe } from '@stripe/stripe-js';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 const pricingTiers = [
   { id: "10", price: 10, credits: 10, popular: false },
@@ -41,11 +43,19 @@ export default function Pricing() {
       
       const stripe = await stripePromise;
       if (stripe) {
-        await stripe.redirectToCheckout({ sessionId: id });
+        const { error } = await stripe.redirectToCheckout({ sessionId: id });
+        if (error) {
+          toast({
+            title: "Error",
+            description: error.message || "Failed to redirect to checkout",
+            variant: "destructive",
+          });
+          setLoading(null);
+        }
       } else {
         toast({
-          title: "Error",
-          description: "Stripe not loaded",
+          title: "Error", 
+          description: "Stripe failed to load. Please refresh and try again.",
           variant: "destructive",
         });
         setLoading(null);
