@@ -54,12 +54,24 @@ export default function Pricing() {
       
       if (stripe) {
         console.log('Redirecting to checkout with session ID:', responseData.id);
-        const { error } = await stripe.redirectToCheckout({ sessionId: responseData.id });
-        if (error) {
-          console.error('Stripe redirect error:', error);
+        try {
+          const result = await stripe.redirectToCheckout({ sessionId: responseData.id });
+          console.log('Stripe redirect result:', result);
+          if (result.error) {
+            console.error('Stripe redirect error:', result.error);
+            toast({
+              title: "Error",
+              description: result.error.message || "Failed to redirect to checkout",
+              variant: "destructive",
+            });
+            setLoading(null);
+          }
+          // If successful, redirectToCheckout will redirect the page and this code won't execute
+        } catch (redirectError: any) {
+          console.error('Stripe redirect exception:', redirectError);
           toast({
-            title: "Error",
-            description: error.message || "Failed to redirect to checkout",
+            title: "Error", 
+            description: redirectError.message || "Failed to redirect to Stripe checkout",
             variant: "destructive",
           });
           setLoading(null);
