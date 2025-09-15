@@ -10,7 +10,7 @@ import { detectAI } from '@/lib/ai-detection';
 import { MathView } from './math-view';
 import { useQuery } from '@tanstack/react-query';
 
-import { Wand2 } from 'lucide-react';
+import { Wand2, Trash2 } from 'lucide-react';
 // Using inline icon since we're having trouble with the import
 const IconSparkles = ({ className = '' }) => (
   <svg 
@@ -300,9 +300,7 @@ const StudentSubmissionBox: React.FC<StudentSubmissionBoxProps> = ({ value, onCh
             onClick={clearSubmission}
             className="w-full mt-2 mb-2 text-gray-500 border-gray-300"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="h-4 w-4 mr-1" />
             Clear Submission
           </Button>
         )}

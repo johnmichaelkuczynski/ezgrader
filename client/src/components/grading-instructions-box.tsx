@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import FileUpload from './file-upload';
 import { MathView } from './math-view';
 
-import { Wand2 } from 'lucide-react';
+import { Wand2, Trash2 } from 'lucide-react';
 
 interface GradingInstructionsBoxProps {
   value: string;
@@ -102,10 +102,7 @@ const GradingInstructionsBox: React.FC<GradingInstructionsBoxProps> = ({ value, 
                   className="absolute top-2 right-2 h-6 w-6 p-0 rounded-full bg-gray-200 hover:bg-gray-300"
                   aria-label="Clear text"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               )}
             </div>
@@ -137,10 +134,7 @@ const GradingInstructionsBox: React.FC<GradingInstructionsBoxProps> = ({ value, 
                   className="absolute top-2 right-2 h-6 w-6 p-0 rounded-full bg-gray-200 hover:bg-gray-300"
                   aria-label="Clear text"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
+                  <Trash2 className="h-3.5 w-3.5" />
                 </Button>
               )}
             </>
@@ -155,9 +149,7 @@ const GradingInstructionsBox: React.FC<GradingInstructionsBoxProps> = ({ value, 
             onClick={() => onChange('')}
             className="w-full mt-2 mb-2 text-gray-500 border-gray-300"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
+            <Trash2 className="h-4 w-4 mr-1" />
             Clear Instructions
           </Button>
         )}
