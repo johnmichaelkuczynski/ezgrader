@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Download, Upload, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
 
 // LLM Provider options for AI Text Rewriter (using SHEN branding)
 const LLM_PROVIDERS = [
@@ -20,9 +21,19 @@ interface AITextRewriterProps {
   className?: string;
 }
 
+interface StyleSample {
+  id: number;
+  name: string;
+  content: string;
+  description?: string;
+  category: string;
+  isDefault: boolean;
+}
+
 export default function AITextRewriter({ className }: AITextRewriterProps) {
   const [inputText, setInputText] = useState("");
   const [styleSample, setStyleSample] = useState("");
+  const [selectedStyleSampleId, setSelectedStyleSampleId] = useState<number | null>(null);
   const [outputText, setOutputText] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [llmProvider, setLlmProvider] = useState("anthropic"); // Default to Anthropic
@@ -39,19 +50,36 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
   
   const { toast } = useToast();
 
-  // Default style sample (The Raven Paradox)
-  const defaultStyleSample = `Carl Hempel's ravens paradox illustrates a fundamental problem with inductive reasoning. Consider the statement "All ravens are black." According to the logic of confirmation, observing a black raven should support this hypothesis. However, the statement is logically equivalent to "All non-black things are non-ravens." By this equivalence, observing a white shoe—which is indeed non-black and non-raven—should equally support our original hypothesis about ravens.
+  // Fetch style samples from backend
+  const { data: styleSamples = [], isLoading: isLoadingStyleSamples } = useQuery<StyleSample[]>({
+    queryKey: ["/api/ai-rewriter/style-samples"],
+  });
 
-This leads to the paradoxical conclusion that examining white shoes in our living room provides evidence about the color of ravens in the wild. While logically sound, this violates our intuitive understanding of relevant evidence. The paradox reveals the complexity inherent in inductive inference and highlights how formal logical structures can diverge from practical reasoning.
-
-Hempel proposed that the paradox dissolves when we consider the relative informativeness of different observations, but the underlying tension between logical validity and intuitive relevance remains a subject of philosophical debate.`;
-
-  // Set default style sample on component mount
-  useEffect(() => {
-    if (!styleSample) {
-      setStyleSample(defaultStyleSample);
+  // Handle style sample selection
+  const handleStyleSampleChange = (value: string) => {
+    if (value === "custom") {
+      setSelectedStyleSampleId(null);
+      setStyleSample("");
+    } else {
+      const sampleId = parseInt(value);
+      const sample = styleSamples.find((s: StyleSample) => s.id === sampleId);
+      if (sample) {
+        setSelectedStyleSampleId(sampleId);
+        setStyleSample(sample.content);
+      }
     }
-  }, []);
+  };
+
+  // Set default style sample when samples are loaded
+  useEffect(() => {
+    if (styleSamples.length > 0 && !selectedStyleSampleId && !styleSample) {
+      const defaultSample = styleSamples.find((s: StyleSample) => s.isDefault) || styleSamples[0];
+      if (defaultSample) {
+        setSelectedStyleSampleId(defaultSample.id);
+        setStyleSample(defaultSample.content);
+      }
+    }
+  }, [styleSamples, selectedStyleSampleId, styleSample]);
 
   const handleAnalyzeText = async (text: string) => {
     if (!text.trim()) return null;
@@ -289,12 +317,37 @@ Hempel proposed that the paradox dissolves when we consider the relative informa
 
             {/* Box B - Style Sample */}
             <div className="space-y-2">
-              <Label htmlFor="style-sample">Box B - Style Sample</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="style-sample">Box B - Style Sample</Label>
+                <Select value={selectedStyleSampleId?.toString() || "custom"} onValueChange={handleStyleSampleChange}>
+                  <SelectTrigger className="w-[200px]" data-testid="select-style-sample">
+                    <SelectValue placeholder="Select sample" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="custom">Custom Text</SelectItem>
+                    {isLoadingStyleSamples ? (
+                      <SelectItem value="loading" disabled>
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Loading...
+                      </SelectItem>
+                    ) : (
+                      styleSamples.map((sample: StyleSample) => (
+                        <SelectItem key={sample.id} value={sample.id.toString()}>
+                          {sample.name}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
               <Textarea
                 id="style-sample"
                 placeholder="Enter text whose writing style you want to mimic..."
                 value={styleSample}
-                onChange={(e) => setStyleSample(e.target.value)}
+                onChange={(e) => {
+                  setStyleSample(e.target.value);
+                  setSelectedStyleSampleId(null); // Switch to custom when manually editing
+                }}
                 className="min-h-[300px] font-mono text-sm"
                 data-testid="textarea-style-sample"
               />

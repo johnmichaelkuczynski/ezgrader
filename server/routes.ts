@@ -2820,6 +2820,156 @@ Continue from where it left off and provide a proper ending:`;
     }
   });
 
+  // Create style sample endpoint (for seeding)
+  app.post("/api/ai-rewriter/style-samples", requireAuth, async (req, res) => {
+    try {
+      const { name, content, description, category, isDefault } = req.body;
+      
+      if (!name || !content) {
+        return res.status(400).json({ message: "Name and content are required" });
+      }
+
+      const sample = await storage.createStyleSample({
+        name,
+        content,
+        description: description || null,
+        category: category || "general",
+        isDefault: isDefault || false,
+      });
+
+      res.json(sample);
+    } catch (error) {
+      console.error('Create style sample error:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Failed to create style sample' });
+    }
+  });
+
+  // Seed initial style samples (one-time setup)
+  app.post("/api/ai-rewriter/seed-samples", requireAuth, async (req, res) => {
+    try {
+      const existingSamples = await storage.getAllStyleSamples();
+      if (existingSamples.length > 0) {
+        return res.json({ message: "Style samples already exist", count: existingSamples.length });
+      }
+
+      const initialSamples = [
+        {
+          name: "Inferential Knowledge",
+          content: `Inferential knowledge and logical dependence Two kinds of knowledge: direct and indirect
+Some knowledge is direct; some is indirect.
+Indirect knowledge is knowledge that is acquired through inference.
+To make an inference is to form a new belief on the basis of an old one.
+Inferences, when legitimate, are made in accordance with legitimate rules of inference. Rules of inference, when legitimate, correspond to dependence-relations.
+
+Two kinds of dependence-relations: causal and logical
+
+There are two kinds of dependence-relations: logical and causal.
+  Logical dependence-relations hold among propositions. A proposition is a truth or a falsehood.
+  Example of a logical dependence-relation: The proposition that x is a triangle cannot be true unless the proposition that x has three sides is true. Therefore, x s being a triangle depends on x s having three sides.
+  Causal relations hold among states of affairs, not truths and falsehoods. (A state of affairs is anything that is in space-time.)
+Example of a causal dependence-relation: Smith cannot pass the class unless Smith studies.
+Therefore, Smith s passing depends on his studying.
+The first-dependence relation is interpropositional, i.e. it holds between propositions.
+  The second is objectual, i.e. it holds between occupants of the space-time manifold and therefore between  objects,  relative to some delineation of that term.
+
+Propositions the objects of belief
+   The objects of knowledge are propositions. It isn't known unless it's believed and it isn't believed unless it's a proposition.
+   One can be aware of non-propositions, e.g. rocks, trees, people, but one does not in the relevant sense know them. Rather, one knows truths about them.
+
+Relations of logical dependence not known through observation
+   Some dependence-relations are known, not through sensory observation, but through conceptual analysis. Such truths are analytic, as opposed to empirical. Examples of analytic truths are:
+
+1. If P, then either P or Q.
+
+2. There are infinitely many primes.
+
+3. Nothing can be numerate or literate without being sentient.
+
+4. There are no laws where there is no government.
+
+5. There is no recursive definition of the class of Dedekind-cuts.
+
+6. 1+1=2.
+
+7. 1+1?3.
+
+
+  1 obviously expresses a dependence-relation, and 2-7 non-obviously do so, as their meanings are:
+
+
+  2*. A set s having finitely many members depends on its not having the set of prime numbers as a subset.
+
+3*. An entity s being literate or numerate depends on its being sentient. 4*. The presence of law depends on the presence of government.
+  5*. A set s having either finitely many or denumerably many members depends on its not having a cardinality equal to or greater than the cardinality of the class of Dedekind cuts.
+
+6*. A set s being a couple depends on its being the union of two non-overlapping unit sets. 7*. A set s being a triple depends on its not being the union of two non-overlapping unit sets.
+
+Analytic truth and analytic knowledge
+
+Analytic knowledge is always knowledge of dependence-relations.
+Empirical knowledge can be either direct or indirect; the same is true of analytic knowledge.
+[1]
+
+Knowledge vs. awareness
+   Knowledge is conceptually articulated awareness. In order for me to know that my shoes are uncomfortably tight, I need to have the concepts shoe, tight, discomfort, etc. I do not need to have these concepts---or, arguably, any concepts---to be aware of the uncomfortable tightness in my shoes. My knowledge of that truth is a conceptualization of my awareness of that state of affairs.
+  Equivalently, there are two kinds of awareness: propositional and objectual. My visual perception of the dog in front of me is a case of objectual awareness, as is my awareness of the tightness of my shoes. My knowledge that there is a dog in front of me is a case of proposition- awareness, as is my knowledge that my shoes are uncomfortably tight.
+
+Truths, not objects, the objects of explanation
+   Observations are objectual awarenesses. The contents of such awarenesses must be converted into propositions if they are to be explained. This is because it is truths that are explained, and truths are true propositions.
+  "But don't we explain events?" it will be objected. "Don't we explain bolts of lightning and avalanches?"
+To explain some avalanche or lightning-bolt x is to explain why it is a truth that x occurred.
+One is aware of lightning-bolts and avalanches. One explains the corresponding truths.
+
+Causal relations known through observation
+   Causal relations can be known only through one s senses (through sight, touch, etc.) and through real-time awareness of one s own psychological processes. In other words, causal relations can only be known empirically; and knowledge of them is therefore empirical.
+
+All theoretical knowledge inferential but not vice versa
+  Theoretical truths are necessarily known through inference, and knowledge of such truths is therefore inferential.
+  But not all inferential knowledge is theoretical knowledge. I notice that you look tired and on that basis know that you didn't get enough sleep. That knowledge is inferential but non- theoretical.
+
+Theories and theoretical knowledge
+  A theory is given by a proposition that, if true, describes some relatively comprehensive fact about the structure of the universe.
+Theoretical knowledge is either
+
+(i) Knowledge of such a theory (e.g. your knowledge of evolutionary theory)
+
+or
+
+  (ii) Knowledge that is derived from knowledge of such a theory (e.g. your knowledge that, the laws of mechanics being what they are and projectile x s state of motion being what it is, x will collide with surface y in approximately two hours).`,
+          description: "Philosophical text analyzing the nature of inferential knowledge and logical dependence relations",
+          category: "philosophy",
+          isDefault: true
+        },
+        {
+          name: "Raven Paradox",
+          content: `Carl Hempel's ravens paradox illustrates a fundamental problem with inductive reasoning. Consider the statement "All ravens are black." According to the logic of confirmation, observing a black raven should support this hypothesis. However, the statement is logically equivalent to "All non-black things are non-ravens." By this equivalence, observing a white shoe—which is indeed non-black and non-raven—should equally support our original hypothesis about ravens.
+
+This leads to the paradoxical conclusion that examining white shoes in our living room provides evidence about the color of ravens in the wild. While logically sound, this violates our intuitive understanding of relevant evidence. The paradox reveals the complexity inherent in inductive inference and highlights how formal logical structures can diverge from practical reasoning.
+
+Hempel proposed that the paradox dissolves when we consider the relative informativeness of different observations, but the underlying tension between logical validity and intuitive relevance remains a subject of philosophical debate.`,
+          description: "Classic philosophical text about confirmation bias and inductive reasoning",
+          category: "philosophy",
+          isDefault: false
+        }
+      ];
+
+      const createdSamples = [];
+      for (const sample of initialSamples) {
+        const created = await storage.createStyleSample(sample);
+        createdSamples.push(created);
+      }
+
+      res.json({ 
+        message: "Style samples seeded successfully", 
+        samples: createdSamples,
+        count: createdSamples.length 
+      });
+    } catch (error) {
+      console.error('Seed style samples error:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Failed to seed style samples' });
+    }
+  });
+
   // Get instruction presets endpoint
   app.get("/api/ai-rewriter/instruction-presets", requireAuth, async (req, res) => {
     try {
