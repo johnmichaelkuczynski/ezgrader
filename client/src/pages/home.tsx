@@ -21,6 +21,7 @@ import AssignmentComparison from "@/components/assignment-comparison";
 import AssignmentAttachments from "@/components/assignment-attachments";
 import { MathView } from "@/components/math-view";
 import ChatWithAI from "@/components/chat-with-ai";
+import AITextRewriter from "@/components/ai-text-rewriter";
 import PDFExport from "@/components/pdf-export";
 
 import GradeLevelSelector, { GradeLevel } from "@/components/grade-level-selector";
@@ -1139,6 +1140,11 @@ export default function Home() {
           onSendToGrading={setGradingText}
           onSendToPerfectGenerator={setPerfectAssignmentText}
         />
+      </div>
+
+      {/* AI Text Rewriter */}
+      <div className="mt-6">
+        <AITextRewriter />
       </div>
     </div>
   );
