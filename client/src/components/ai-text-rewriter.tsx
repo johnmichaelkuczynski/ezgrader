@@ -10,10 +10,10 @@ import { apiRequest } from "@/lib/queryClient";
 
 // LLM Provider options for AI Text Rewriter (using SHEN branding)
 const LLM_PROVIDERS = [
-  { value: "anthropic", label: "SHEN 1 (Anthropic)" },
-  { value: "openai", label: "SHEN 2 (OpenAI)" },
-  { value: "deepseek", label: "SHEN 3 (DeepSeek)" },
-  { value: "perplexity", label: "SHEN 4 (Perplexity)" },
+  { value: "anthropic", label: "SHEN 1" },
+  { value: "openai", label: "SHEN 2" },
+  { value: "deepseek", label: "SHEN 3" },
+  { value: "perplexity", label: "SHEN 4" },
 ];
 
 interface AITextRewriterProps {
