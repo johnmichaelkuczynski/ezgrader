@@ -505,24 +505,24 @@ export default function Home() {
     switch(llmProvider) {
       case 'deepseek':
         return [
-          { value: 'deepseek-chat', label: 'DeepSeek Chat' },
-          { value: 'deepseek-coder', label: 'DeepSeek Coder' },
+          { value: 'deepseek-chat', label: 'DEEPSEEK 3 CHAT/SHEN 5' },
+          { value: 'deepseek-coder', label: 'DEEPSEEK 3 CODER/SHEN 5 CODER' },
         ];
       case 'openai':
         return [
-          { value: 'gpt-4o', label: 'GPT-4o' },
-          { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+          { value: 'gpt-4o', label: 'GPT 4/SHEN 1' },
+          { value: 'gpt-4-turbo', label: 'GPT 4 TURBO/SHEN 2' },
         ];
       case 'anthropic':
         return [
-          { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet' },
-          { value: 'claude-3-opus', label: 'Claude 3 Opus' },
+          { value: 'claude-3-7-sonnet-20250219', label: 'CLAUDE 3.7/SHEN 3' },
+          { value: 'claude-3-opus', label: 'CLAUDE 3.8/SHEN 4' },
         ];
       case 'perplexity':
         return [
-          { value: 'llama-3.1-sonar-small-128k-online', label: 'Llama 3.1 Sonar (Small)' },
-          { value: 'llama-3.1-sonar-large-128k-online', label: 'Llama 3.1 Sonar (Large)' },
-          { value: 'llama-3.1-sonar-huge-128k-online', label: 'Llama 3.1 Sonar (Huge)' },
+          { value: 'llama-3.1-sonar-small-128k-online', label: 'SHEN 6 (SMALL)' },
+          { value: 'llama-3.1-sonar-large-128k-online', label: 'SHEN 6 (LARGE)' },
+          { value: 'llama-3.1-sonar-huge-128k-online', label: 'SHEN 6 (HUGE)' },
         ];
       default:
         return [];
