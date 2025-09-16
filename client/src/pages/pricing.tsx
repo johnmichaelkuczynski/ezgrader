@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import PayPalButton from "@/components/PayPalButton";
+// PayPal temporarily disabled due to authentication issues
+// import PayPalButton from "@/components/PayPalButton";
 
 // Load Stripe properly using loadStripe
 import { loadStripe } from '@stripe/stripe-js';
@@ -75,8 +76,8 @@ export default function Pricing() {
       return;
     }
 
-    // Prepare PayPal session before attempting Stripe
-    await createPayPalOrder(tier);
+    // PayPal temporarily disabled
+    // await createPayPalOrder(tier);
 
     // 2) Create checkout session and navigate
     try {
@@ -205,26 +206,28 @@ export default function Pricing() {
                 </div>
                 
                 <div className="space-y-3">
-                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-                    <div className="flex items-center mb-2">
-                      <div className="w-6 h-6 text-yellow-600 mr-2">⚠️</div>
-                      <h4 className="text-sm font-medium text-yellow-800">Payment Services Temporarily Unavailable</h4>
-                    </div>
-                    <p className="text-sm text-yellow-700">
-                      Credit purchases are temporarily disabled due to payment gateway maintenance. 
-                      Please try again later or contact support for assistance.
-                    </p>
-                    <div className="mt-3">
-                      <Button 
-                        variant="outline" 
-                        className="w-full" 
-                        disabled={true}
-                        data-testid={`button-purchase-${tier.id}-disabled`}
-                      >
+                  <Button 
+                    className="w-full" 
+                    onClick={() => buyCredits(tier.id)}
+                    disabled={loading === tier.id}
+                    variant={tier.popular ? "default" : "outline"}
+                    data-testid={`button-purchase-${tier.id}`}
+                  >
+                    {loading === tier.id ? (
+                      <div className="flex items-center">
+                        <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2" />
+                        Preparing...
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
                         <CreditCard className="h-4 w-4 mr-2" />
-                        Purchase Temporarily Disabled
-                      </Button>
-                    </div>
+                        Purchase Credits
+                      </div>
+                    )}
+                  </Button>
+                  
+                  <div className="mt-2 text-center text-xs text-gray-500">
+                    💳 Secure card payments powered by Stripe
                   </div>
                 </div>
               </CardContent>
@@ -232,28 +235,17 @@ export default function Pricing() {
           ))}
         </div>
         
-        <div className="mt-12 space-y-6">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-blue-900 mb-4">💡 Payment Service Notice</h3>
-            <div className="space-y-2 text-blue-800">
-              <p><strong>Issue:</strong> Both Stripe and PayPal payment gateways are currently experiencing authentication issues due to expired API credentials.</p>
-              <p><strong>Status:</strong> Payment services are temporarily disabled while we update our payment gateway configuration.</p>
-              <p><strong>Next Steps:</strong> Please contact support or try again later once payment services are restored.</p>
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold mb-4">Storage Fees</h3>
-            <p className="text-gray-600 mb-2">
-              • Storage is charged at 500 tokens/month for 50,000 words
-            </p>
-            <p className="text-gray-600 mb-2">
-              • Storage fees only apply to documents saved between sessions
-            </p>
-            <p className="text-gray-600">
-              • No storage fees for documents used within a single session
-            </p>
-          </div>
+        <div className="mt-12 bg-white rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Storage Fees</h3>
+          <p className="text-gray-600 mb-2">
+            • Storage is charged at 500 tokens/month for 50,000 words
+          </p>
+          <p className="text-gray-600 mb-2">
+            • Storage fees only apply to documents saved between sessions
+          </p>
+          <p className="text-gray-600">
+            • No storage fees for documents used within a single session
+          </p>
         </div>
       </div>
     </div>
