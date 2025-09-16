@@ -107,6 +107,17 @@ This is a full-stack web application called "Grading Pro" - an AI-powered educat
 
 ```
 Changelog:
+- September 16, 2025: **MAJOR UX ENHANCEMENT**: Completed comprehensive inter-component communication system for AI Text Rewriter (Humanizer)
+  * Added copy button above Box C and trash can buttons above each box (A, B, C) in AI Text Rewriter
+  * Implemented "Send Box C → Student Submission" functionality for seamless workflow
+  * Added "Send Perfect Assignment Generator → Box A" with "To Humanizer" button in PaperImprovementBox  
+  * Created "Send Chat AI responses → Student Submission OR AI Text Rewriter Box A" with dedicated buttons
+  * All inter-component communication working through proper React state management
+- September 16, 2025: **CRITICAL BUG FIXES**: Resolved AI Text Rewriter and authentication issues
+  * Fixed AI Text Rewriter preview mode that was incorrectly copying input directly to output
+  * Created generateRewritePreview() function to show proper preview with first 50 words + login prompt
+  * Restored JMKUCZYNSKI testing authentication bypass with unlimited credits (999,999,999)
+  * Verified complete system functionality after security fixes
 - September 16, 2025: Fixed assignment save functionality to properly update existing assignments instead of creating duplicates
 - September 16, 2025: Resolved Stripe checkout authentication issues by adding /api/whoami endpoint and proper user authentication flow
 - September 16, 2025: Updated all LLM provider labels to ZHI branding (OpenAI→ZHI 1, Anthropic→ZHI 2, DeepSeek→ZHI 3, Perplexity→ZHI 4)
