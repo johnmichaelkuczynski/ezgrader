@@ -1,4 +1,4 @@
-import { users, type User, type InsertUser, assignments, type Assignment, type InsertAssignment, submissions, type Submission, type InsertSubmission, gradingResults, type GradingResult, type InsertGradingResult, exemplars, type Exemplar, type InsertExemplar, assignmentAttachments, type AssignmentAttachment, type InsertAssignmentAttachment } from "@shared/schema";
+import { users, type User, type InsertUser, assignments, type Assignment, type InsertAssignment, submissions, type Submission, type InsertSubmission, gradingResults, type GradingResult, type InsertGradingResult, exemplars, type Exemplar, type InsertExemplar, assignmentAttachments, type AssignmentAttachment, type InsertAssignmentAttachment, rewriteSessions, type RewriteSession, type InsertRewriteSession, rewriteResults, type RewriteResult, type InsertRewriteResult, styleSamples, type StyleSample, type InsertStyleSample, instructionPresets, type InstructionPreset, type InsertInstructionPreset } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 
@@ -57,6 +57,35 @@ export interface IStorage {
   
   // Student Records methods
   getAllSubmissionsWithGrades(): Promise<StudentGradeRecord[]>;
+  
+  // AI Text Rewriter methods
+  // Rewrite Session methods
+  getRewriteSession(id: number): Promise<RewriteSession | undefined>;
+  getRewriteSessionsByUserId(userId: number): Promise<RewriteSession[]>;
+  createRewriteSession(session: InsertRewriteSession): Promise<RewriteSession>;
+  updateRewriteSession(id: number, session: Partial<InsertRewriteSession>): Promise<RewriteSession | undefined>;
+  deleteRewriteSession(id: number): Promise<boolean>;
+  
+  // Rewrite Result methods
+  getRewriteResult(id: number): Promise<RewriteResult | undefined>;
+  getRewriteResultsBySessionId(sessionId: number): Promise<RewriteResult[]>;
+  createRewriteResult(result: InsertRewriteResult): Promise<RewriteResult>;
+  updateRewriteResult(id: number, result: Partial<InsertRewriteResult>): Promise<RewriteResult | undefined>;
+  deleteRewriteResult(id: number): Promise<boolean>;
+  
+  // Style Sample methods
+  getStyleSample(id: number): Promise<StyleSample | undefined>;
+  getAllStyleSamples(): Promise<StyleSample[]>;
+  createStyleSample(sample: InsertStyleSample): Promise<StyleSample>;
+  updateStyleSample(id: number, sample: Partial<InsertStyleSample>): Promise<StyleSample | undefined>;
+  deleteStyleSample(id: number): Promise<boolean>;
+  
+  // Instruction Preset methods
+  getInstructionPreset(id: number): Promise<InstructionPreset | undefined>;
+  getAllInstructionPresets(): Promise<InstructionPreset[]>;
+  createInstructionPreset(preset: InsertInstructionPreset): Promise<InstructionPreset>;
+  updateInstructionPreset(id: number, preset: Partial<InsertInstructionPreset>): Promise<InstructionPreset | undefined>;
+  deleteInstructionPreset(id: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -230,6 +259,107 @@ export class DatabaseStorage implements IStorage {
     const result = await db.delete(assignmentAttachments).where(eq(assignmentAttachments.id, id));
     return (result.rowCount ?? 0) > 0;
   }
+
+  // AI Text Rewriter methods - DatabaseStorage implementation
+  // Rewrite Session methods
+  async getRewriteSession(id: number): Promise<RewriteSession | undefined> {
+    const result = await db.select().from(rewriteSessions).where(eq(rewriteSessions.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getRewriteSessionsByUserId(userId: number): Promise<RewriteSession[]> {
+    return await db.select().from(rewriteSessions).where(eq(rewriteSessions.userId, userId));
+  }
+
+  async createRewriteSession(session: InsertRewriteSession): Promise<RewriteSession> {
+    const result = await db.insert(rewriteSessions).values(session).returning();
+    return result[0];
+  }
+
+  async updateRewriteSession(id: number, session: Partial<InsertRewriteSession>): Promise<RewriteSession | undefined> {
+    const result = await db.update(rewriteSessions).set(session).where(eq(rewriteSessions.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteRewriteSession(id: number): Promise<boolean> {
+    const result = await db.delete(rewriteSessions).where(eq(rewriteSessions.id, id)).returning({ id: rewriteSessions.id });
+    return result.length > 0;
+  }
+
+  // Rewrite Result methods
+  async getRewriteResult(id: number): Promise<RewriteResult | undefined> {
+    const result = await db.select().from(rewriteResults).where(eq(rewriteResults.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getRewriteResultsBySessionId(sessionId: number): Promise<RewriteResult[]> {
+    return await db.select().from(rewriteResults).where(eq(rewriteResults.sessionId, sessionId));
+  }
+
+  async createRewriteResult(result: InsertRewriteResult): Promise<RewriteResult> {
+    const insertResult = await db.insert(rewriteResults).values(result).returning();
+    return insertResult[0];
+  }
+
+  async updateRewriteResult(id: number, result: Partial<InsertRewriteResult>): Promise<RewriteResult | undefined> {
+    const updateResult = await db.update(rewriteResults).set(result).where(eq(rewriteResults.id, id)).returning();
+    return updateResult[0];
+  }
+
+  async deleteRewriteResult(id: number): Promise<boolean> {
+    const result = await db.delete(rewriteResults).where(eq(rewriteResults.id, id)).returning({ id: rewriteResults.id });
+    return result.length > 0;
+  }
+
+  // Style Sample methods
+  async getStyleSample(id: number): Promise<StyleSample | undefined> {
+    const result = await db.select().from(styleSamples).where(eq(styleSamples.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getAllStyleSamples(): Promise<StyleSample[]> {
+    return await db.select().from(styleSamples);
+  }
+
+  async createStyleSample(sample: InsertStyleSample): Promise<StyleSample> {
+    const result = await db.insert(styleSamples).values(sample).returning();
+    return result[0];
+  }
+
+  async updateStyleSample(id: number, sample: Partial<InsertStyleSample>): Promise<StyleSample | undefined> {
+    const result = await db.update(styleSamples).set(sample).where(eq(styleSamples.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteStyleSample(id: number): Promise<boolean> {
+    const result = await db.delete(styleSamples).where(eq(styleSamples.id, id)).returning({ id: styleSamples.id });
+    return result.length > 0;
+  }
+
+  // Instruction Preset methods
+  async getInstructionPreset(id: number): Promise<InstructionPreset | undefined> {
+    const result = await db.select().from(instructionPresets).where(eq(instructionPresets.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getAllInstructionPresets(): Promise<InstructionPreset[]> {
+    return await db.select().from(instructionPresets);
+  }
+
+  async createInstructionPreset(preset: InsertInstructionPreset): Promise<InstructionPreset> {
+    const result = await db.insert(instructionPresets).values(preset).returning();
+    return result[0];
+  }
+
+  async updateInstructionPreset(id: number, preset: Partial<InsertInstructionPreset>): Promise<InstructionPreset | undefined> {
+    const result = await db.update(instructionPresets).set(preset).where(eq(instructionPresets.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteInstructionPreset(id: number): Promise<boolean> {
+    const result = await db.delete(instructionPresets).where(eq(instructionPresets.id, id)).returning({ id: instructionPresets.id });
+    return result.length > 0;
+  }
 }
 
 // Export a DatabaseStorage instance instead of MemStorage
@@ -241,6 +371,10 @@ export class MemStorage implements IStorage {
   private gradingResults: GradingResult[] = [];
   private exemplars: Exemplar[] = [];
   private assignmentAttachments: AssignmentAttachment[] = [];
+  private rewriteSessions: RewriteSession[] = [];
+  private rewriteResults: RewriteResult[] = [];
+  private styleSamples: StyleSample[] = [];
+  private instructionPresets: InstructionPreset[] = [];
   private nextId = 1;
 
   // User methods
@@ -495,6 +629,139 @@ export class MemStorage implements IStorage {
     }
     
     return records;
+  }
+
+  // AI Text Rewriter methods - MemStorage implementation
+  // Rewrite Session methods
+  async getRewriteSession(id: number): Promise<RewriteSession | undefined> {
+    return this.rewriteSessions.find(s => s.id === id);
+  }
+
+  async getRewriteSessionsByUserId(userId: number): Promise<RewriteSession[]> {
+    return this.rewriteSessions.filter(s => s.userId === userId);
+  }
+
+  async createRewriteSession(session: InsertRewriteSession): Promise<RewriteSession> {
+    const newSession: RewriteSession = {
+      id: this.nextId++,
+      ...session,
+      createdAt: new Date()
+    };
+    this.rewriteSessions.push(newSession);
+    return newSession;
+  }
+
+  async updateRewriteSession(id: number, session: Partial<InsertRewriteSession>): Promise<RewriteSession | undefined> {
+    const index = this.rewriteSessions.findIndex(s => s.id === id);
+    if (index === -1) return undefined;
+    this.rewriteSessions[index] = { ...this.rewriteSessions[index], ...session };
+    return this.rewriteSessions[index];
+  }
+
+  async deleteRewriteSession(id: number): Promise<boolean> {
+    const index = this.rewriteSessions.findIndex(s => s.id === id);
+    if (index === -1) return false;
+    this.rewriteSessions.splice(index, 1);
+    return true;
+  }
+
+  // Rewrite Result methods
+  async getRewriteResult(id: number): Promise<RewriteResult | undefined> {
+    return this.rewriteResults.find(r => r.id === id);
+  }
+
+  async getRewriteResultsBySessionId(sessionId: number): Promise<RewriteResult[]> {
+    return this.rewriteResults.filter(r => r.sessionId === sessionId);
+  }
+
+  async createRewriteResult(result: InsertRewriteResult): Promise<RewriteResult> {
+    const newResult: RewriteResult = {
+      id: this.nextId++,
+      ...result,
+      createdAt: new Date()
+    };
+    this.rewriteResults.push(newResult);
+    return newResult;
+  }
+
+  async updateRewriteResult(id: number, result: Partial<InsertRewriteResult>): Promise<RewriteResult | undefined> {
+    const index = this.rewriteResults.findIndex(r => r.id === id);
+    if (index === -1) return undefined;
+    this.rewriteResults[index] = { ...this.rewriteResults[index], ...result };
+    return this.rewriteResults[index];
+  }
+
+  async deleteRewriteResult(id: number): Promise<boolean> {
+    const index = this.rewriteResults.findIndex(r => r.id === id);
+    if (index === -1) return false;
+    this.rewriteResults.splice(index, 1);
+    return true;
+  }
+
+  // Style Sample methods
+  async getStyleSample(id: number): Promise<StyleSample | undefined> {
+    return this.styleSamples.find(s => s.id === id);
+  }
+
+  async getAllStyleSamples(): Promise<StyleSample[]> {
+    return [...this.styleSamples];
+  }
+
+  async createStyleSample(sample: InsertStyleSample): Promise<StyleSample> {
+    const newSample: StyleSample = {
+      id: this.nextId++,
+      ...sample,
+      createdAt: new Date()
+    };
+    this.styleSamples.push(newSample);
+    return newSample;
+  }
+
+  async updateStyleSample(id: number, sample: Partial<InsertStyleSample>): Promise<StyleSample | undefined> {
+    const index = this.styleSamples.findIndex(s => s.id === id);
+    if (index === -1) return undefined;
+    this.styleSamples[index] = { ...this.styleSamples[index], ...sample };
+    return this.styleSamples[index];
+  }
+
+  async deleteStyleSample(id: number): Promise<boolean> {
+    const index = this.styleSamples.findIndex(s => s.id === id);
+    if (index === -1) return false;
+    this.styleSamples.splice(index, 1);
+    return true;
+  }
+
+  // Instruction Preset methods
+  async getInstructionPreset(id: number): Promise<InstructionPreset | undefined> {
+    return this.instructionPresets.find(p => p.id === id);
+  }
+
+  async getAllInstructionPresets(): Promise<InstructionPreset[]> {
+    return [...this.instructionPresets];
+  }
+
+  async createInstructionPreset(preset: InsertInstructionPreset): Promise<InstructionPreset> {
+    const newPreset: InstructionPreset = {
+      id: this.nextId++,
+      ...preset,
+      createdAt: new Date()
+    };
+    this.instructionPresets.push(newPreset);
+    return newPreset;
+  }
+
+  async updateInstructionPreset(id: number, preset: Partial<InsertInstructionPreset>): Promise<InstructionPreset | undefined> {
+    const index = this.instructionPresets.findIndex(p => p.id === id);
+    if (index === -1) return undefined;
+    this.instructionPresets[index] = { ...this.instructionPresets[index], ...preset };
+    return this.instructionPresets[index];
+  }
+
+  async deleteInstructionPreset(id: number): Promise<boolean> {
+    const index = this.instructionPresets.findIndex(p => p.id === id);
+    if (index === -1) return false;
+    this.instructionPresets.splice(index, 1);
+    return true;
   }
 }
 

@@ -2,11 +2,16 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import bcrypt from 'bcryptjs';
 import { storage } from "./storage";
-import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage } from "@shared/schema";
+import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage, insertRewriteSessionSchema, rewriteRequestSchema, gptZeroAnalysisSchema } from "@shared/schema";
 import { detectAIContent } from "./services/gptzero";
 import { generateOpenAIResponse } from "./services/openai";
 import { generateAnthropicResponse } from "./services/anthropic";
 import { generatePerplexityResponse } from "./services/perplexity";
+import { gptZeroService } from "./services/gptZero";
+import { aiProviderService } from "./services/aiProviders";
+import { textChunkerService } from "./services/textChunker";
+import { documentGeneratorService } from "./services/documentGenerator";
+import { fileProcessorService } from "./services/fileProcessor";
 import OpenAI from "openai";
 import { sendEmail } from "./services/sendgrid";
 import { needsChunking, processWithChunking } from "./utils/chunking";
@@ -2593,6 +2598,286 @@ Continue from where it left off and provide a proper ending:`;
       res.status(500).json({ 
         message: error instanceof Error ? error.message : 'Failed to delete assignment'
       });
+    }
+  });
+
+  // ===== AI TEXT REWRITER ROUTES =====
+  
+  // Add token cost for text rewriting
+  const TEXT_REWRITE_COST = 150; // tokens per rewrite operation
+  
+  // Helper function to clean markup from AI responses
+  function cleanMarkup(text: string): string {
+    return text
+      .replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1') // bold/italic
+      .replace(/^#{1,6}\s+/gm, '') // headers
+      .replace(/`([^`]+)`/g, '$1') // inline code
+      .replace(/```[\s\S]*?```/g, (match) => {
+        return match.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '');
+      }) // code blocks
+      .replace(/~~([^~]+)~~/g, '$1') // strikethrough
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // links
+      .replace(/>\s+/gm, '') // blockquotes
+      .replace(/\n{3,}/g, '\n\n') // excessive whitespace
+      .trim();
+  }
+
+  // Configure multer for AI Text Rewriter file uploads
+  const aiRewriteUpload = multer({
+    dest: 'uploads/ai-rewriter/',
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB limit
+    },
+  });
+
+  // Text analysis endpoint (for direct text input)
+  app.post("/api/ai-rewriter/analyze-text", requireAuth, async (req, res) => {
+    try {
+      const result = gptZeroAnalysisSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Text is required" });
+      }
+
+      const { text } = result.data;
+      const userId = req.session.userId!; // ! is safe because requireAuth middleware ensures this exists
+      
+      // Check credits for AI detection
+      const hasCredits = await checkCredits(userId, TOKEN_COSTS.aiDetection);
+      if (!hasCredits) {
+        return res.status(402).json({ message: "Insufficient credits for AI detection analysis" });
+      }
+
+      const gptZeroResult = await gptZeroService.analyzeText(text);
+      const wordCount = text.trim().split(/\s+/).length;
+      
+      // Generate chunks if text is long enough
+      const chunks = wordCount > 500 ? textChunkerService.chunkText(text) : [];
+      
+      // Analyze chunks if they exist
+      if (chunks.length > 0) {
+        const chunkTexts = chunks.map(chunk => chunk.content);
+        const chunkResults = await gptZeroService.analyzeBatch(chunkTexts);
+        
+        chunks.forEach((chunk, index) => {
+          (chunk as any).aiScore = chunkResults[index].aiScore;
+        });
+      }
+
+      // Deduct credits after successful analysis
+      await deductCredits(userId, TOKEN_COSTS.aiDetection, 'ai_detection', 'AI text analysis');
+
+      res.json({
+        aiScore: gptZeroResult.aiScore,
+        wordCount,
+        chunks,
+        needsChunking: wordCount > 500,
+      });
+    } catch (error) {
+      console.error('Text analysis error:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Analysis failed' });
+    }
+  });
+
+  // File upload endpoint for AI Text Rewriter
+  app.post("/api/ai-rewriter/upload", requireAuth, aiRewriteUpload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const userId = req.session.userId!; // ! is safe because requireAuth middleware ensures this exists
+      
+      // Check credits for AI detection
+      const hasCredits = await checkCredits(userId, TOKEN_COSTS.aiDetection);
+      if (!hasCredits) {
+        return res.status(402).json({ message: "Insufficient credits for file analysis" });
+      }
+
+      await fileProcessorService.validateFile(req.file);
+      const processedFile = await fileProcessorService.processFile(req.file.path, req.file.originalname);
+      
+      // Analyze with GPTZero
+      const gptZeroResult = await gptZeroService.analyzeText(processedFile.content);
+
+      // Generate chunks if text is long enough
+      const chunks = processedFile.wordCount > 500 
+        ? textChunkerService.chunkText(processedFile.content)
+        : [];
+
+      // Analyze chunks if they exist
+      if (chunks.length > 0) {
+        const chunkTexts = chunks.map(chunk => chunk.content);
+        const chunkResults = await gptZeroService.analyzeBatch(chunkTexts);
+        
+        chunks.forEach((chunk, index) => {
+          (chunk as any).aiScore = chunkResults[index].aiScore;
+        });
+      }
+
+      // Deduct credits after successful analysis
+      await deductCredits(userId, TOKEN_COSTS.aiDetection, 'ai_detection', 'File upload and AI analysis');
+
+      res.json({
+        filename: processedFile.filename,
+        content: processedFile.content,
+        wordCount: processedFile.wordCount,
+        chunks,
+        aiScore: gptZeroResult.aiScore,
+        needsChunking: processedFile.wordCount > 500,
+      });
+    } catch (error) {
+      console.error('File upload error:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Upload failed' });
+    }
+  });
+
+  // Main rewrite endpoint
+  app.post("/api/ai-rewriter/rewrite", requireAuth, async (req, res) => {
+    try {
+      const result = rewriteRequestSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ message: "Invalid request data", errors: result.error.errors });
+      }
+
+      const rewriteRequest = result.data;
+      const userId = req.session.userId!; // ! is safe because requireAuth middleware ensures this exists
+      
+      // Check credits for text rewriting
+      const hasCredits = await checkCredits(userId, TEXT_REWRITE_COST);
+      if (!hasCredits) {
+        return res.status(402).json({ message: "Insufficient credits for text rewriting" });
+      }
+
+      // Analyze input text
+      const inputAnalysis = await gptZeroService.analyzeText(rewriteRequest.inputText);
+      
+      // Create rewrite session
+      const sessionData = {
+        userId: userId,
+        inputText: rewriteRequest.inputText,
+        styleSample: rewriteRequest.styleSample || null,
+        contextReference: rewriteRequest.contextReference || null,
+        customInstructions: rewriteRequest.customInstructions || null,
+        llmProvider: rewriteRequest.llmProvider,
+        llmModel: rewriteRequest.llmModel,
+        temperature: rewriteRequest.temperature || 0.7,
+      };
+
+      const session = await storage.createRewriteSession(sessionData);
+
+      try {
+        // Perform rewrite
+        const rewrittenText = await aiProviderService.rewrite(rewriteRequest.llmProvider, {
+          inputText: rewriteRequest.inputText,
+          styleText: rewriteRequest.styleSample,
+          contentMixText: rewriteRequest.contextReference,
+          customInstructions: rewriteRequest.customInstructions,
+        });
+
+        // Analyze output text
+        const outputAnalysis = await gptZeroService.analyzeText(rewrittenText);
+
+        // Clean markup from rewritten text
+        const cleanedRewrittenText = cleanMarkup(rewrittenText);
+
+        // Store result
+        await storage.createRewriteResult({
+          sessionId: session.id,
+          chunkIndex: 0,
+          originalChunk: rewriteRequest.inputText,
+          rewrittenChunk: cleanedRewrittenText,
+          inputGptZeroScore: inputAnalysis.aiScore,
+          outputGptZeroScore: outputAnalysis.aiScore,
+        });
+
+        // Deduct credits after successful rewrite
+        await deductCredits(userId, TEXT_REWRITE_COST, 'text_rewrite', 'AI text rewriting');
+
+        res.json({
+          rewrittenText: cleanedRewrittenText,
+          inputAiScore: inputAnalysis.aiScore,
+          outputAiScore: outputAnalysis.aiScore,
+          sessionId: session.id,
+        });
+      } catch (error) {
+        console.error('Rewrite processing error:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('Rewrite error:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Rewrite failed' });
+    }
+  });
+
+  // Get style samples endpoint
+  app.get("/api/ai-rewriter/style-samples", requireAuth, async (req, res) => {
+    try {
+      const samples = await storage.getAllStyleSamples();
+      res.json(samples);
+    } catch (error) {
+      console.error('Get style samples error:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Failed to get style samples' });
+    }
+  });
+
+  // Get instruction presets endpoint
+  app.get("/api/ai-rewriter/instruction-presets", requireAuth, async (req, res) => {
+    try {
+      const presets = await storage.getAllInstructionPresets();
+      res.json(presets);
+    } catch (error) {
+      console.error('Get instruction presets error:', error);
+      res.status(500).json({ message: error instanceof Error ? error.message : 'Failed to get instruction presets' });
+    }
+  });
+
+  // Download endpoint
+  app.post("/api/ai-rewriter/download/:format", requireAuth, async (req, res) => {
+    try {
+      const { format } = req.params;
+      const { content, filename } = req.body;
+      
+      if (!content || typeof content !== 'string') {
+        return res.status(400).json({ message: "Content is required" });
+      }
+      
+      if (!['pdf', 'docx', 'txt'].includes(format)) {
+        return res.status(400).json({ message: "Invalid format. Supported: pdf, docx, txt" });
+      }
+      
+      const baseFilename = filename || 'rewritten-text';
+      let buffer: Buffer;
+      let mimeType: string;
+      let downloadFilename: string;
+      
+      switch (format) {
+        case 'pdf':
+          buffer = await documentGeneratorService.generatePDF(content, baseFilename);
+          mimeType = 'application/pdf';
+          downloadFilename = `${baseFilename}.pdf`;
+          break;
+        case 'docx':
+          buffer = await documentGeneratorService.generateDOCX(content, baseFilename);
+          mimeType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          downloadFilename = `${baseFilename}.docx`;
+          break;
+        case 'txt':
+          buffer = documentGeneratorService.generateTXT(content);
+          mimeType = 'text/plain';
+          downloadFilename = `${baseFilename}.txt`;
+          break;
+        default:
+          return res.status(400).json({ message: "Unsupported format" });
+      }
+      
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${downloadFilename}"`);
+      res.setHeader('Content-Length', buffer.length.toString());
+      
+      res.end(buffer);
+    } catch (error: any) {
+      console.error('Download error:', error);
+      res.status(500).json({ message: `Failed to generate ${req.params.format?.toUpperCase()} file: ${error.message}` });
     }
   });
 

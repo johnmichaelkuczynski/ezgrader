@@ -95,7 +95,7 @@ export const rewriteSessions = pgTable("rewrite_sessions", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   userId: integer("user_id").references(() => users.id),
   inputText: text("input_text").notNull(),
-  styleSample: text("style_sample").notNull(),
+  styleSample: text("style_sample"), // Nullable since Box B is optional
   contextReference: text("context_reference"),
   customInstructions: text("custom_instructions"),
   llmProvider: text("llm_provider").notNull(),
@@ -364,3 +364,18 @@ export const uploadFileSchema = z.object({
 export type RewriteRequest = z.infer<typeof rewriteRequestSchema>;
 export type GptZeroAnalysisRequest = z.infer<typeof gptZeroAnalysisSchema>;
 export type UploadFileRequest = z.infer<typeof uploadFileSchema>;
+
+// Additional interfaces for AI Text Rewriter
+export interface TextChunk {
+  id: string;
+  content: string;
+  startWord: number;
+  endWord: number;
+}
+
+export interface GptZeroResult {
+  aiScore: number; // Percentage (0-100)
+  isAI: boolean;
+  confidence: number;
+  message?: string;
+}
