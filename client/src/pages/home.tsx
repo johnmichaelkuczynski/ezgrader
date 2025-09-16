@@ -33,8 +33,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { processFile } from "@/lib/document-processor";
 
 export default function Home() {
-  const [llmProvider, setLlmProvider] = useState<LLMProvider>("deepseek");
-  const [llmModel, setLlmModel] = useState<LLMModel>("deepseek-chat");
+  const [llmProvider, setLlmProvider] = useState<LLMProvider>("openai");
+  const [llmModel, setLlmModel] = useState<LLMModel>("gpt-4o");
   const [temperature, setTemperature] = useState<number>(0.7);
   const [gradingDepth, setGradingDepth] = useState<GradingDepth>("medium");
   const [includeCharts, setIncludeCharts] = useState<boolean>(true);
