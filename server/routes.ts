@@ -7,7 +7,7 @@ import { detectAIContent } from "./services/gptzero";
 import { generateOpenAIResponse } from "./services/openai";
 import { generateAnthropicResponse } from "./services/anthropic";
 import { generatePerplexityResponse } from "./services/perplexity";
-import { gptZeroService } from "./services/gptZero";
+import { gptZeroService } from "./services/gptzero";
 import { aiProviderService } from "./services/aiProviders";
 import { textChunkerService } from "./services/textChunker";
 import { documentGeneratorService } from "./services/documentGenerator";
@@ -2810,7 +2810,7 @@ Continue from where it left off and provide a proper ending:`;
   });
 
   // Get style samples endpoint
-  app.get("/api/ai-rewriter/style-samples", requireAuth, async (req, res) => {
+  app.get("/api/ai-rewriter/style-samples", async (req, res) => {
     try {
       const samples = await storage.getAllStyleSamples();
       res.json(samples);
@@ -3012,7 +3012,7 @@ Causal relations known through observation
   });
 
   // Get instruction presets endpoint
-  app.get("/api/ai-rewriter/instruction-presets", requireAuth, async (req, res) => {
+  app.get("/api/ai-rewriter/instruction-presets", async (req, res) => {
     try {
       const presets = await storage.getAllInstructionPresets();
       res.json(presets);
