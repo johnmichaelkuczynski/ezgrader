@@ -84,15 +84,76 @@ export const purchases = pgTable("purchases", {
 export const tokenUsage = pgTable("token_usage", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   userId: integer("user_id").references(() => users.id),
-  action: text("action").notNull(), // 'grading', 'perfect_essay', 'chat', 'storage'
+  action: text("action").notNull(), // 'grading', 'perfect_essay', 'chat', 'storage', 'text_rewrite'
   tokensUsed: integer("tokens_used").notNull(),
   description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// AI Text Rewriter Tables
+export const rewriteSessions = pgTable("rewrite_sessions", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  userId: integer("user_id").references(() => users.id),
+  inputText: text("input_text").notNull(),
+  styleSample: text("style_sample").notNull(),
+  contextReference: text("context_reference"),
+  customInstructions: text("custom_instructions"),
+  llmProvider: text("llm_provider").notNull(),
+  llmModel: text("llm_model").notNull(),
+  temperature: doublePrecision("temperature").default(0.3),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const rewriteResults = pgTable("rewrite_results", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  sessionId: integer("session_id").references(() => rewriteSessions.id),
+  chunkIndex: integer("chunk_index").default(0),
+  originalChunk: text("original_chunk").notNull(),
+  rewrittenChunk: text("rewritten_chunk").notNull(),
+  inputGptZeroScore: doublePrecision("input_gptzero_score"),
+  outputGptZeroScore: doublePrecision("output_gptzero_score"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const styleSamples = pgTable("style_samples", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  name: text("name").notNull(),
+  content: text("content").notNull(),
+  description: text("description"),
+  category: text("category").default("general"),
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const instructionPresets = pgTable("instruction_presets", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  name: text("name").notNull(),
+  instructions: text("instructions").notNull(),
+  category: text("category").default("general"),
+  description: text("description"),
+  isDefault: boolean("is_default").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   assignments: many(assignments),
+  rewriteSessions: many(rewriteSessions),
+}));
+
+export const rewriteSessionsRelations = relations(rewriteSessions, ({ one, many }) => ({
+  user: one(users, {
+    fields: [rewriteSessions.userId],
+    references: [users.id],
+  }),
+  results: many(rewriteResults),
+}));
+
+export const rewriteResultsRelations = relations(rewriteResults, ({ one }) => ({
+  session: one(rewriteSessions, {
+    fields: [rewriteResults.sessionId],
+    references: [rewriteSessions.id],
+  }),
 }));
 
 export const assignmentsRelations = relations(assignments, ({ one, many }) => ({
@@ -188,6 +249,42 @@ export const insertAssignmentAttachmentSchema = createInsertSchema(assignmentAtt
   filePath: true,
 });
 
+export const insertRewriteSessionSchema = createInsertSchema(rewriteSessions).pick({
+  userId: true,
+  inputText: true,
+  styleSample: true,
+  contextReference: true,
+  customInstructions: true,
+  llmProvider: true,
+  llmModel: true,
+  temperature: true,
+});
+
+export const insertRewriteResultSchema = createInsertSchema(rewriteResults).pick({
+  sessionId: true,
+  chunkIndex: true,
+  originalChunk: true,
+  rewrittenChunk: true,
+  inputGptZeroScore: true,
+  outputGptZeroScore: true,
+});
+
+export const insertStyleSampleSchema = createInsertSchema(styleSamples).pick({
+  name: true,
+  content: true,
+  description: true,
+  category: true,
+  isDefault: true,
+});
+
+export const insertInstructionPresetSchema = createInsertSchema(instructionPresets).pick({
+  name: true,
+  instructions: true,
+  category: true,
+  description: true,
+  isDefault: true,
+});
+
 // Authentication schemas
 export const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -228,3 +325,42 @@ export type PurchaseRequest = z.infer<typeof purchaseSchema>;
 
 export type Purchase = typeof purchases.$inferSelect;
 export type TokenUsage = typeof tokenUsage.$inferSelect;
+
+// AI Text Rewriter Types
+export type InsertRewriteSession = z.infer<typeof insertRewriteSessionSchema>;
+export type RewriteSession = typeof rewriteSessions.$inferSelect;
+
+export type InsertRewriteResult = z.infer<typeof insertRewriteResultSchema>;
+export type RewriteResult = typeof rewriteResults.$inferSelect;
+
+export type InsertStyleSample = z.infer<typeof insertStyleSampleSchema>;
+export type StyleSample = typeof styleSamples.$inferSelect;
+
+export type InsertInstructionPreset = z.infer<typeof insertInstructionPresetSchema>;
+export type InstructionPreset = typeof instructionPresets.$inferSelect;
+
+// API request/response schemas for AI Text Rewriter
+export const rewriteRequestSchema = z.object({
+  inputText: z.string().min(1, "Input text is required"),
+  styleSample: z.string().min(1, "Style sample is required"),
+  contextReference: z.string().optional(),
+  customInstructions: z.string().optional(),
+  llmProvider: z.enum(["openai", "anthropic", "deepseek", "perplexity"]),
+  llmModel: z.string(),
+  temperature: z.number().min(0).max(2).optional(),
+  useChunking: z.boolean().optional(),
+});
+
+export const gptZeroAnalysisSchema = z.object({
+  text: z.string().min(1, "Text is required for analysis"),
+});
+
+export const uploadFileSchema = z.object({
+  content: z.string(),
+  filename: z.string(),
+  mimeType: z.string(),
+});
+
+export type RewriteRequest = z.infer<typeof rewriteRequestSchema>;
+export type GptZeroAnalysisRequest = z.infer<typeof gptZeroAnalysisSchema>;
+export type UploadFileRequest = z.infer<typeof uploadFileSchema>;
