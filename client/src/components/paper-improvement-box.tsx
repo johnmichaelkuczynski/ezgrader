@@ -11,6 +11,7 @@ interface PaperImprovementBoxProps {
   llmModel: string;
   temperature: number;
   onUseAsSubmission?: (improvedText: string) => void;
+  onSendToHumanizer?: (text: string) => void;
 }
 
 const PaperImprovementBox: React.FC<PaperImprovementBoxProps> = ({ 
@@ -18,7 +19,8 @@ const PaperImprovementBox: React.FC<PaperImprovementBoxProps> = ({
   llmProvider, 
   llmModel,
   temperature,
-  onUseAsSubmission
+  onUseAsSubmission,
+  onSendToHumanizer
 }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [improvedText, setImprovedText] = useState<string | null>(null);
@@ -246,7 +248,7 @@ Focus on improving the content while keeping the exact same type of document req
               Grade This Version
             </Button>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 mb-2">
               <Button 
                 variant="outline" 
                 onClick={() => setImprovedText(null)}
@@ -260,6 +262,22 @@ Focus on improving the content while keeping the exact same type of document req
               >
                 Improve
               </Button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-2">
+              {onSendToHumanizer && (
+                <Button
+                  onClick={() => onSendToHumanizer(improvedText!)}
+                  disabled={!improvedText}
+                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white"
+                  title="Send to AI Text Rewriter (Humanizer)"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                  To Humanizer
+                </Button>
+              )}
               <Button
                 onClick={() => {
                   // Create a blob and trigger download

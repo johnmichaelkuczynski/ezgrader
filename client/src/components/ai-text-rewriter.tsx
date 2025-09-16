@@ -292,9 +292,10 @@ interface AITextRewriterProps {
   className?: string;
   onSendToStudentSubmission?: (text: string) => void;
   onSendToBoxA?: (text: string) => void;
+  initialInputText?: string;
 }
 
-export default function AITextRewriter({ className, onSendToStudentSubmission, onSendToBoxA }: AITextRewriterProps) {
+export default function AITextRewriter({ className, onSendToStudentSubmission, onSendToBoxA, initialInputText }: AITextRewriterProps) {
   // Authentication state
   const { data: authData } = useQuery({
     queryKey: ["/api/auth/me"],
@@ -304,6 +305,13 @@ export default function AITextRewriter({ className, onSendToStudentSubmission, o
   const isAuthenticated = !!user;
   
   const [inputText, setInputText] = useState("");
+  
+  // Update input text when initialInputText prop changes
+  useEffect(() => {
+    if (initialInputText && initialInputText !== inputText) {
+      setInputText(initialInputText);
+    }
+  }, [initialInputText, inputText]);
   const [styleSample, setStyleSample] = useState("");
   const [outputText, setOutputText] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");

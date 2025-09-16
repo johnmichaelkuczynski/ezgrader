@@ -48,6 +48,9 @@ export default function Home() {
   const [gradingResult, setGradingResult] = useState<string | null>(null);
   const [chartData, setChartData] = useState<any | null>(null);
   
+  // AI Text Rewriter state
+  const [aiTextRewriterInput, setAiTextRewriterInput] = useState<string>("");
+  
   const [isEmailModalOpen, setIsEmailModalOpen] = useState<boolean>(false);
   const [currentAssignmentId, setCurrentAssignmentId] = useState<number | null>(null);
   const [editingAssignmentId, setEditingAssignmentId] = useState<number | null>(null);
@@ -804,6 +807,7 @@ export default function Home() {
                   temperature={temperature}
                   gradeLevel={gradeLevel}
                   onUseAsSubmission={setStudentText}
+                  onSendToHumanizer={setAiTextRewriterInput}
                 />
               </div>
 
@@ -1139,6 +1143,7 @@ export default function Home() {
           onSendToStudent={setStudentText}
           onSendToGrading={setGradingText}
           onSendToPerfectGenerator={setPerfectAssignmentText}
+          onSendToHumanizer={setAiTextRewriterInput}
         />
       </div>
 
@@ -1146,10 +1151,8 @@ export default function Home() {
       <div className="mt-6">
         <AITextRewriter 
           onSendToStudentSubmission={setStudentText}
-          onSendToBoxA={(text) => {
-            // Future: implement sending to Box A when needed
-            console.log('Text sent to Box A:', text);
-          }}
+          onSendToBoxA={setAiTextRewriterInput}
+          initialInputText={aiTextRewriterInput}
         />
       </div>
     </div>

@@ -26,6 +26,7 @@ interface ChatWithAIProps {
   onSendToStudent: (text: string) => void;
   onSendToGrading: (text: string) => void;
   onSendToPerfectGenerator?: (text: string) => void;
+  onSendToHumanizer?: (text: string) => void;
 }
 
 const ChatWithAI: React.FC<ChatWithAIProps> = ({
@@ -36,7 +37,8 @@ const ChatWithAI: React.FC<ChatWithAIProps> = ({
   onSendToAssignment,
   onSendToStudent,
   onSendToGrading,
-  onSendToPerfectGenerator
+  onSendToPerfectGenerator,
+  onSendToHumanizer
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -314,6 +316,19 @@ Results: ${resultText || 'Not provided'}
                                   >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                  </Button>
+                                )}
+                                {onSendToHumanizer && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 text-red-600"
+                                    onClick={() => onSendToHumanizer(message.content)}
+                                    title="Send to AI Text Rewriter (Humanizer)"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                                     </svg>
                                   </Button>
                                 )}
