@@ -2921,21 +2921,7 @@ To explain some avalanche or lightning-bolt x is to explain why it is a truth th
 One is aware of lightning-bolts and avalanches. One explains the corresponding truths.
 
 Causal relations known through observation
-   Causal relations can be known only through one s senses (through sight, touch, etc.) and through real-time awareness of one s own psychological processes. In other words, causal relations can only be known empirically; and knowledge of them is therefore empirical.
-
-All theoretical knowledge inferential but not vice versa
-  Theoretical truths are necessarily known through inference, and knowledge of such truths is therefore inferential.
-  But not all inferential knowledge is theoretical knowledge. I notice that you look tired and on that basis know that you didn't get enough sleep. That knowledge is inferential but non- theoretical.
-
-Theories and theoretical knowledge
-  A theory is given by a proposition that, if true, describes some relatively comprehensive fact about the structure of the universe.
-Theoretical knowledge is either
-
-(i) Knowledge of such a theory (e.g. your knowledge of evolutionary theory)
-
-or
-
-  (ii) Knowledge that is derived from knowledge of such a theory (e.g. your knowledge that, the laws of mechanics being what they are and projectile x s state of motion being what it is, x will collide with surface y in approximately two hours).`,
+   Causal relations can be known only through one s senses (through sight, touch, etc.) and through real-time awareness of one s own psychological processes. In other words, causal relations can only be known empirically; and knowledge of them is therefore empirical.`,
           description: "Philosophical text analyzing the nature of inferential knowledge and logical dependence relations",
           category: "philosophy",
           isDefault: true
