@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Download, Upload, Wand2, ChevronDown } from "lucide-react";
+import { Loader2, Download, Upload, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
@@ -344,7 +344,6 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
                 <Select value={selectedStyleSampleId?.toString() || "custom"} onValueChange={handleStyleSampleChange}>
                   <SelectTrigger data-testid="select-style-sample">
                     <SelectValue placeholder="Select writing sample" />
-                    <ChevronDown className="h-4 w-4" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="custom">Custom Text</SelectItem>
