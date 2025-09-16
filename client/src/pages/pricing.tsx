@@ -28,23 +28,14 @@ export default function Pricing() {
     // 1) Get logged-in user id (works even if cookies are blocked in iframes)
     let userId = null;
     try {
-      console.log('Checking authentication with /api/whoami...');
       const who = await fetch('/api/whoami', { credentials: 'include' });
-      console.log('Whoami response status:', who.status);
-      
       if (who.ok) {
         const j = await who.json();
-        console.log('Whoami response data:', j);
         userId = j.userId || null;
-        console.log('Extracted userId:', userId);
-      } else {
-        console.error('Whoami request failed with status:', who.status);
       }
     } catch (e) {
       console.error('Failed to check authentication:', e);
     }
-    
-    console.log('Final userId for checkout:', userId);
 
     if (!userId) {
       // Force real-page auth flow
