@@ -186,33 +186,36 @@ export default function AssignmentSelector({
     setSaveError(null);
     
     try {
-      // Use the user we just created with ID 1
-      const userId = 1;
+      // Check if we're updating an existing assignment or creating a new one
+      const isUpdating = selectedAssignmentId && selectedAssignmentId !== "";
       
       // Create the payload with default grading instructions if empty
       const payload = {
-        userId,
+        ...(isUpdating ? {} : { userId: 1 }), // Only include userId for new assignments
         title: newTitle,
         prompt: assignmentText,
         gradingInstructions: gradingText.trim() || "Follow the assignment prompt closely and provide thoughtful analysis with clear reasoning.",
       };
-      console.log('Saving assignment with payload:', payload);
       
-      // Make the API request
-      const response = await fetch('/api/assignments', {
-        method: 'POST',
+      console.log(isUpdating ? 'Updating assignment:' : 'Creating assignment:', payload);
+      
+      // Make the appropriate API request
+      const url = isUpdating ? `/api/assignments/${selectedAssignmentId}` : '/api/assignments';
+      const method = isUpdating ? 'PATCH' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
       });
       
-      // Log the response for debugging
-      console.log('Save assignment response status:', response.status);
+      console.log(`${method} ${url} response status:`, response.status);
       
       // Handle error response
       if (!response.ok) {
-        let errorMessage = 'Failed to save assignment';
+        let errorMessage = isUpdating ? 'Failed to update assignment' : 'Failed to save assignment';
         try {
           const errorData = await response.json();
           console.error('Error response from server:', errorData);
@@ -226,8 +229,16 @@ export default function AssignmentSelector({
       const savedAssignment = await response.json();
       
       // Update assignments list
-      setAssignments([...assignments, savedAssignment]);
-      setSelectedAssignmentId(String(savedAssignment.id));
+      if (isUpdating) {
+        // Update existing assignment in the list
+        setAssignments(assignments.map(a => 
+          a.id === parseInt(selectedAssignmentId) ? savedAssignment : a
+        ));
+      } else {
+        // Add new assignment to the list
+        setAssignments([...assignments, savedAssignment]);
+        setSelectedAssignmentId(String(savedAssignment.id));
+      }
       
       // Refresh the main assignments list cache
       const event = new CustomEvent('assignmentSaved', { detail: savedAssignment });
@@ -236,6 +247,11 @@ export default function AssignmentSelector({
       // Close dialog
       setIsSaveDialogOpen(false);
       setNewTitle("");
+      
+      toast({
+        title: isUpdating ? "Assignment Updated" : "Assignment Saved",
+        description: `"${savedAssignment.title}" has been ${isUpdating ? 'updated' : 'saved'} successfully.`,
+      });
     } catch (err) {
       console.error('Error saving assignment:', err);
       setSaveError('Failed to save assignment. Please try again.');
