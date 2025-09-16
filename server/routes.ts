@@ -34,19 +34,31 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-06-30.basil",
 });
 
-// Initialize PayPal client for order verification
-if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET) {
-  throw new Error('Missing required PayPal secrets: PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET');
+// Initialize PayPal client for order verification (gracefully handle missing credentials)
+const paypalEnabled = process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET;
+if (!paypalEnabled) {
+  console.log('⚠️  PayPal disabled: Missing credentials PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET');
 }
-const paypalClient = new Client({
-  clientCredentialsAuthCredentials: {
-    oAuthClientId: process.env.PAYPAL_CLIENT_ID,
-    oAuthClientSecret: process.env.PAYPAL_CLIENT_SECRET,
-  },
-  timeout: 0,
-  environment: process.env.NODE_ENV === "production" ? Environment.Production : Environment.Sandbox,
-});
-const paypalOrdersController = new OrdersController(paypalClient);
+let paypalClient: Client | null = null;
+let paypalOrdersController: OrdersController | null = null;
+
+if (paypalEnabled) {
+  try {
+    paypalClient = new Client({
+      clientCredentialsAuthCredentials: {
+        oAuthClientId: process.env.PAYPAL_CLIENT_ID!,
+        oAuthClientSecret: process.env.PAYPAL_CLIENT_SECRET!,
+      },
+      timeout: 0,
+      environment: process.env.NODE_ENV === "production" ? Environment.Production : Environment.Sandbox,
+    });
+    paypalOrdersController = new OrdersController(paypalClient);
+    console.log('✅ PayPal client initialized successfully');
+  } catch (error) {
+    console.error('❌ PayPal client initialization failed:', error);
+    console.log('⚠️  PayPal payments will be disabled');
+  }
+}
 
 // Extend session type
 declare module 'express-session' {
@@ -520,21 +532,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // PayPal payment routes
+  // PayPal payment routes (with graceful handling)
   app.get("/paypal/setup", async (req, res) => {
-    await loadPaypalDefault(req, res);
+    if (!paypalEnabled) {
+      return res.status(503).json({ 
+        error: 'PayPal temporarily unavailable',
+        message: 'PayPal payments are currently disabled due to configuration issues.'
+      });
+    }
+    try {
+      await loadPaypalDefault(req, res);
+    } catch (error) {
+      console.error('PayPal setup error:', error);
+      res.status(503).json({ 
+        error: 'PayPal setup failed',
+        message: 'PayPal is temporarily unavailable. Please try again later.'
+      });
+    }
   });
 
   app.post("/paypal/order", async (req, res) => {
-    await createPaypalOrder(req, res);
+    if (!paypalEnabled) {
+      return res.status(503).json({ 
+        error: 'PayPal temporarily unavailable',
+        message: 'PayPal payments are currently disabled.'
+      });
+    }
+    try {
+      await createPaypalOrder(req, res);
+    } catch (error) {
+      console.error('PayPal order creation error:', error);
+      res.status(503).json({ 
+        error: 'PayPal order creation failed',
+        message: 'Unable to create PayPal order. Please try again later.'
+      });
+    }
   });
 
   app.post("/paypal/order/:orderID/capture", async (req, res) => {
-    await capturePaypalOrder(req, res);
+    if (!paypalEnabled) {
+      return res.status(503).json({ 
+        error: 'PayPal temporarily unavailable',
+        message: 'PayPal payments are currently disabled.'
+      });
+    }
+    try {
+      await capturePaypalOrder(req, res);
+    } catch (error) {
+      console.error('PayPal capture error:', error);
+      res.status(503).json({ 
+        error: 'PayPal capture failed',
+        message: 'Unable to capture PayPal payment. Please contact support.'
+      });
+    }
   });
 
   // PayPal purchase initiation route
   app.post('/api/create-paypal-order', requireAuth, async (req: Request, res: Response) => {
+    if (!paypalEnabled) {
+      return res.status(503).json({ 
+        error: 'PayPal temporarily unavailable',
+        message: 'PayPal payments are currently disabled due to configuration issues.'
+      });
+    }
     try {
       // Validate request body using purchaseSchema
       const result = purchaseSchema.safeParse(req.body);
@@ -584,6 +644,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // PayPal purchase completion route - SECURE IMPLEMENTATION WITH ACTUAL PAYPAL VERIFICATION
   app.post('/api/complete-paypal-purchase', requireAuth, async (req: Request, res: Response) => {
+    if (!paypalEnabled || !paypalOrdersController) {
+      return res.status(503).json({ 
+        error: 'PayPal temporarily unavailable',
+        message: 'PayPal payments are currently disabled.'
+      });
+    }
     try {
       // Validate orderID input
       const orderIdSchema = z.object({
@@ -634,7 +700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let paypalOrderDetails;
       try {
         // Fetch the actual order details from PayPal
-        const { body, ...httpResponse } = await paypalOrdersController.getOrder({ id: orderID });
+        const { body, ...httpResponse } = await paypalOrdersController!.getOrder({ id: orderID });
         paypalOrderDetails = JSON.parse(String(body));
         
         console.log(`PayPal order verification response for ${orderID}:`, {
@@ -681,7 +747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (paypalOrderDetails.status === 'APPROVED') {
         console.log(`💳 PayPal order ${orderID} is APPROVED, capturing payment...`);
         try {
-          const { body: captureBody, ...captureResponse } = await paypalOrdersController.captureOrder({ 
+          const { body: captureBody, ...captureResponse } = await paypalOrdersController!.captureOrder({ 
             id: orderID, 
             prefer: "return=minimal" 
           });
@@ -808,7 +874,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error('Stripe checkout error:', error);
-      res.status(500).json({ error: 'Failed to create checkout session' });
+      
+      // Handle specific Stripe errors with user-friendly messages
+      if (error.type === 'StripeAuthenticationError') {
+        console.error('🚫 STRIPE KEY ISSUE: API key is expired or invalid');
+        return res.status(503).json({ 
+          error: 'Stripe payment temporarily unavailable',
+          message: 'Card payments are currently unavailable. Please try PayPal or contact support.',
+          usePayPal: true
+        });
+      }
+      
+      if (error.type === 'StripeAPIError') {
+        return res.status(502).json({ 
+          error: 'Payment service error',
+          message: 'Please try again or use PayPal as an alternative.'
+        });
+      }
+      
+      res.status(500).json({ 
+        error: 'Failed to create checkout session',
+        message: 'Please try PayPal or contact support if the issue persists.'
+      });
     }
   });
 

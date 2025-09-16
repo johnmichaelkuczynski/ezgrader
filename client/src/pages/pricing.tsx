@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import PayPalButton from "@/components/PayPalButton";
 
 // Load Stripe properly using loadStripe
 import { loadStripe } from '@stripe/stripe-js';
@@ -23,6 +24,34 @@ export default function Pricing() {
   const [loading, setLoading] = useState<string | null>(null);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+
+  const createPayPalOrder = async (tier: string) => {
+    // Set up PayPal session for purchase
+    const tierData = pricingTiers.find(t => t.id === tier);
+    if (!tierData) return;
+
+    try {
+      const response = await fetch('/api/create-paypal-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ tier })
+      });
+      
+      if (response.ok) {
+        console.log('PayPal session prepared for tier:', tier);
+      } else {
+        const error = await response.json();
+        toast({
+          title: "PayPal Setup Error",
+          description: error.message || "Failed to prepare PayPal payment",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('PayPal session setup error:', error);
+    }
+  };
 
   const buyCredits = async (tier: string) => {
     setLoading(tier);
@@ -46,6 +75,9 @@ export default function Pricing() {
       return;
     }
 
+    // Prepare PayPal session before attempting Stripe
+    await createPayPalOrder(tier);
+
     // 2) Create checkout session and navigate
     try {
       const r = await fetch('/api/checkout', {
@@ -68,30 +100,42 @@ export default function Pricing() {
           const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
           if (error) {
             toast({
-              title: "Error",
+              title: "Checkout Error",
               description: error.message || "Failed to redirect to checkout",
               variant: "destructive",
             });
           }
         } else {
           toast({
-            title: "Error",
-            description: "Stripe failed to load. Please refresh and try again.",
+            title: "Payment Service Unavailable",
+            description: "Stripe failed to load. Please try PayPal below or refresh and try again.",
             variant: "destructive",
           });
         }
         setLoading(null);
         return;
       }
+
+      // Handle specific error responses from backend
+      if (data.usePayPal) {
+        toast({
+          title: "Card Payments Temporarily Unavailable",
+          description: data.message || "Please use PayPal payment option below.",
+          variant: "destructive",
+        });
+        setLoading(null);
+        return;
+      }
+
       toast({
-        title: "Error",
-        description: "Checkout init failed",
+        title: "Payment Error", 
+        description: data.message || "Checkout failed. Please try PayPal below or contact support.",
         variant: "destructive",
       });
       setLoading(null);
     } catch (e: any) {
       toast({
-        title: "Error",
+        title: "Connection Error",
         description: e && e.message ? e.message : 'Checkout error',
         variant: "destructive",
       });
@@ -160,41 +204,56 @@ export default function Pricing() {
                   </div>
                 </div>
                 
-                <Button 
-                  className="w-full" 
-                  onClick={() => buyCredits(tier.id)}
-                  disabled={loading === tier.id}
-                  variant={tier.popular ? "default" : "outline"}
-                  data-testid={`button-purchase-${tier.id}`}
-                >
-                  {loading === tier.id ? (
-                    <div className="flex items-center">
-                      <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2" />
-                      Preparing...
+                <div className="space-y-3">
+                  <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div className="flex items-center mb-2">
+                      <div className="w-6 h-6 text-yellow-600 mr-2">⚠️</div>
+                      <h4 className="text-sm font-medium text-yellow-800">Payment Services Temporarily Unavailable</h4>
                     </div>
-                  ) : (
-                    <div className="flex items-center">
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Purchase Credits
+                    <p className="text-sm text-yellow-700">
+                      Credit purchases are temporarily disabled due to payment gateway maintenance. 
+                      Please try again later or contact support for assistance.
+                    </p>
+                    <div className="mt-3">
+                      <Button 
+                        variant="outline" 
+                        className="w-full" 
+                        disabled={true}
+                        data-testid={`button-purchase-${tier.id}-disabled`}
+                      >
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Purchase Temporarily Disabled
+                      </Button>
                     </div>
-                  )}
-                </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           ))}
         </div>
         
-        <div className="mt-12 bg-white rounded-lg p-6 shadow-sm">
-          <h3 className="text-lg font-semibold mb-4">Storage Fees</h3>
-          <p className="text-gray-600 mb-2">
-            • Storage is charged at 500 tokens/month for 50,000 words
-          </p>
-          <p className="text-gray-600 mb-2">
-            • Storage fees only apply to documents saved between sessions
-          </p>
-          <p className="text-gray-600">
-            • No storage fees for documents used within a single session
-          </p>
+        <div className="mt-12 space-y-6">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <h3 className="text-lg font-semibold text-blue-900 mb-4">💡 Payment Service Notice</h3>
+            <div className="space-y-2 text-blue-800">
+              <p><strong>Issue:</strong> Both Stripe and PayPal payment gateways are currently experiencing authentication issues due to expired API credentials.</p>
+              <p><strong>Status:</strong> Payment services are temporarily disabled while we update our payment gateway configuration.</p>
+              <p><strong>Next Steps:</strong> Please contact support or try again later once payment services are restored.</p>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold mb-4">Storage Fees</h3>
+            <p className="text-gray-600 mb-2">
+              • Storage is charged at 500 tokens/month for 50,000 words
+            </p>
+            <p className="text-gray-600 mb-2">
+              • Storage fees only apply to documents saved between sessions
+            </p>
+            <p className="text-gray-600">
+              • No storage fees for documents used within a single session
+            </p>
+          </div>
         </div>
       </div>
     </div>
