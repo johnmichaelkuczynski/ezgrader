@@ -342,9 +342,9 @@ export type InstructionPreset = typeof instructionPresets.$inferSelect;
 // API request/response schemas for AI Text Rewriter
 export const rewriteRequestSchema = z.object({
   inputText: z.string().min(1, "Input text is required"),
-  styleSample: z.string().min(1, "Style sample is required"),
-  contextReference: z.string().optional(),
-  customInstructions: z.string().optional(),
+  styleSample: z.preprocess(v => (v == null ? "" : v), z.string()),
+  contextReference: z.preprocess(v => (v == null ? "" : v), z.string()),
+  customInstructions: z.preprocess(v => (v == null ? "" : v), z.string()), // <-- ChatGPT's fix
   llmProvider: z.enum(["openai", "anthropic", "deepseek", "perplexity"]),
   llmModel: z.string(),
   temperature: z.number().min(0).max(2).optional(),

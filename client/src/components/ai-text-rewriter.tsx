@@ -451,8 +451,8 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
 
       const response = await apiRequest("POST", "/api/ai-rewriter/rewrite", {
         inputText: inputText.trim(),
-        styleSample: styleSample.trim() || null,
-        customInstructions: instructions || null,
+        styleSample: (styleSample ?? "").toString(),
+        customInstructions: (instructions ?? "").toString(), // <-- force string, never null
         llmProvider,
         llmModel: "claude-3-7-sonnet", // Default model
         temperature,
