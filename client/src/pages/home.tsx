@@ -505,18 +505,18 @@ export default function Home() {
     switch(llmProvider) {
       case 'deepseek':
         return [
-          { value: 'deepseek-chat', label: 'DEEPSEEK 3 CHAT/SHEN 5' },
-          { value: 'deepseek-coder', label: 'DEEPSEEK 3 CODER/SHEN 5 CODER' },
+          { value: 'deepseek-chat', label: 'SHEN 5' },
+          { value: 'deepseek-coder', label: 'SHEN 5 CODER' },
         ];
       case 'openai':
         return [
-          { value: 'gpt-4o', label: 'GPT 4/SHEN 1' },
-          { value: 'gpt-4-turbo', label: 'GPT 4 TURBO/SHEN 2' },
+          { value: 'gpt-4o', label: 'SHEN 1' },
+          { value: 'gpt-4-turbo', label: 'SHEN 2' },
         ];
       case 'anthropic':
         return [
-          { value: 'claude-3-7-sonnet-20250219', label: 'CLAUDE 3.7/SHEN 3' },
-          { value: 'claude-3-opus', label: 'CLAUDE 3.8/SHEN 4' },
+          { value: 'claude-3-7-sonnet-20250219', label: 'SHEN 3' },
+          { value: 'claude-3-opus', label: 'SHEN 4' },
         ];
       case 'perplexity':
         return [
