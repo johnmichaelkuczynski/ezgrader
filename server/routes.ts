@@ -61,7 +61,7 @@ async function checkCredits(userId: number | undefined, requiredTokens: number):
   const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (user.length === 0) return false;
   
-  return user[0].credits >= requiredTokens;
+  return user[0]!.credits >= requiredTokens;
 }
 
 async function deductCredits(userId: number, tokensUsed: number, action: string, description?: string): Promise<boolean> {
@@ -70,7 +70,7 @@ async function deductCredits(userId: number, tokensUsed: number, action: string,
     const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (user.length === 0) return false;
     
-    const newCredits = user[0].credits - tokensUsed;
+    const newCredits = user[0]!.credits - tokensUsed;
     
     // Deduct from user credits
     await db.update(users)
@@ -270,7 +270,7 @@ async function processUploadedFile(file: Express.Multer.File): Promise<string> {
           
         } catch (pdfError) {
           console.error('PDF processing failed:', pdfError);
-          throw new Error(`Failed to process PDF: ${pdfError.message}`);
+          throw new Error(`Failed to process PDF: ${pdfError instanceof Error ? pdfError.message : 'Unknown error'}`);
         }
         
       case 'image/jpeg':
@@ -482,7 +482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get current user credits and add new tokens
         const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
         if (user.length > 0) {
-          const newCredits = user[0].credits + tokens;
+          const newCredits = user[0]!.credits + tokens;
           await db.update(users)
             .set({ credits: newCredits })
             .where(eq(users.id, userId));
@@ -1377,7 +1377,7 @@ The grade for Submission 1 should be honest but typically in the 20-30 range for
         console.log(`Generated comparison preview for unregistered user. Preview length: ${finalResponse.length}`);
       } else {
         // Deduct credits for registered users with sufficient credits
-        await deductCredits(userId, TOKEN_COSTS.comparison, 'comparison', 'Assignment comparison');
+        await deductCredits(userId!, TOKEN_COSTS.comparison, 'comparison', 'Assignment comparison');
         creditsDeducted = TOKEN_COSTS.comparison;
         console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
       }
@@ -1664,7 +1664,7 @@ Be helpful, knowledgeable, and provide detailed responses. If the user asks you 
         console.log(`Generated chat preview for unregistered user. Preview length: ${finalResponse.length}`);
       } else {
         // Deduct credits for registered users with sufficient credits
-        await deductCredits(userId, TOKEN_COSTS.chat, 'chat', 'AI chat conversation');
+        await deductCredits(userId!, TOKEN_COSTS.chat, 'chat', 'AI chat conversation');
         creditsDeducted = TOKEN_COSTS.chat;
         console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
       }
@@ -2159,7 +2159,7 @@ Continue seamlessly from where the previous part ended. Develop the main argumen
       // CREDIT SYSTEM: Check user authentication and credits
       const isRegistered = req.session?.userId !== undefined;
       const userId = req.session?.userId;
-      const hasCredits = isRegistered ? await checkCredits(userId, TOKEN_COSTS.perfectEssay) : false;
+      const hasCredits = isRegistered ? await checkCredits(userId, TOKEN_COSTS.perfect_essay) : false;
 
       console.log(`Perfect answer request - Registered: ${isRegistered}, User ID: ${userId}, Has credits: ${hasCredits}`);
 
@@ -2298,6 +2298,18 @@ Create the response as if you are the ideal student submitting this assignment.`
           isExemplar: true,
           gradeLevel: gradeLevel || 'College Undergraduate'
         });
+      } else {
+        // Default fallback to anthropic if no valid provider is specified
+        result = await generateAnthropicResponse({
+          model: 'claude-3-7-sonnet-20250219',
+          temperature: parseFloat(temperature),
+          assignmentText,
+          gradingText: '',
+          studentText: '',
+          instructionsText: `Generate a PERFECT, EXEMPLARY student response to this assignment that would earn 100/100 points (A+). Target length: ${requiredWords} words minimum.`,
+          isExemplar: true,
+          gradeLevel: gradeLevel || 'College Undergraduate'
+        });
       }
 
       // Check if response appears incomplete (ends mid-sentence or is too short)
@@ -2392,7 +2404,7 @@ Continue from where it left off and provide a proper ending:`;
         if (isRegistered) {
           return res.status(402).json({ 
             error: 'Insufficient credits. Please purchase more credits to continue.',
-            requiredCredits: TOKEN_COSTS.perfectEssay,
+            requiredCredits: TOKEN_COSTS.perfect_essay,
             action: 'perfect_essay'
           });
         }
@@ -2402,8 +2414,8 @@ Continue from where it left off and provide a proper ending:`;
         console.log(`Generated perfect answer preview for unregistered user. Preview length: ${finalResponse.length}`);
       } else {
         // Deduct credits for registered users with sufficient credits
-        await deductCredits(userId, TOKEN_COSTS.perfectEssay, 'perfect_essay', 'Perfect assignment generation');
-        creditsDeducted = TOKEN_COSTS.perfectEssay;
+        await deductCredits(userId!, TOKEN_COSTS.perfect_essay, 'perfect_essay', 'Perfect assignment generation');
+        creditsDeducted = TOKEN_COSTS.perfect_essay;
         console.log(`Deducted ${creditsDeducted} credits from user ${userId}`);
       }
 
@@ -2881,10 +2893,7 @@ Continue from where it left off and provide a proper ending:`;
         creditsDeducted,
         isPreview
       });
-      } catch (error) {
-        console.error('Rewrite processing error:', error);
-        throw error;
-      }
+      
     } catch (error) {
       console.error('Rewrite error:', error);
       res.status(500).json({ message: error instanceof Error ? error.message : 'Rewrite failed' });

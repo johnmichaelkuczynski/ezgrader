@@ -298,7 +298,7 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     queryKey: ["/api/auth/me"],
     retry: false,
   });
-  const user = authData?.user;
+  const user = (authData as any)?.user;
   const isAuthenticated = !!user;
   
   const [inputText, setInputText] = useState("");
