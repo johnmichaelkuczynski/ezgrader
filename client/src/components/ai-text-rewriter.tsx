@@ -372,7 +372,7 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
               <div className="space-y-3">
                 <h3 className="font-semibold text-sm">Style Presets</h3>
                 <p className="text-xs text-muted-foreground">
-                  Presets 1-8 are most effective for humanization
+                  Select style enhancement presets to apply
                 </p>
                 <div className="space-y-3">
                   {isLoadingPresets ? (

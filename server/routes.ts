@@ -2933,56 +2933,56 @@ Causal relations known through observation
           name: "Mixed cadence + clause sprawl",
           instructions: "Alternate short and long sentences; allow some long sentences to wander with extra clauses",
           description: "Alternate short and long sentences; allow some long sentences to wander with extra clauses.",
-          category: "humanization",
+          category: "style",
           isDefault: true
         },
         {
           name: "Asymmetric emphasis",
           instructions: "Over-elaborate one point; compress or skate past another",
           description: "Over-elaborate one point; compress or skate past another.",
-          category: "humanization",
+          category: "style",
           isDefault: true
         },
         {
           name: "One aside",
           instructions: "Add a quick parenthetical or em-dash remark — factual, not jokey",
           description: "Add a quick parenthetical or em-dash remark — factual, not jokey.",
-          category: "humanization",
+          category: "style",
           isDefault: true
         },
         {
           name: "Hedge twice",
           instructions: "Use two mild uncertainty markers ('probably,' 'seems,' 'roughly,' 'I think')",
           description: "Use two mild uncertainty markers ('probably,' 'seems,' 'roughly,' 'I think').",
-          category: "humanization",
+          category: "style",
           isDefault: true
         },
         {
           name: "Local disfluency",
           instructions: "Keep one redundant or slightly awkward phrase that still makes sense",
           description: "Keep one redundant or slightly awkward phrase that still makes sense.",
-          category: "humanization",
+          category: "style",
           isDefault: true
         },
         {
           name: "Mild tangent",
           instructions: "Include one brief related observation that doesn't perfectly fit",
           description: "Include one brief related observation that doesn't perfectly fit.",
-          category: "humanization",
+          category: "style",
           isDefault: false
         },
         {
           name: "Inconsistent register",
           instructions: "Mix slightly formal and casual language within the same text",
           description: "Mix slightly formal and casual language within the same text.",
-          category: "humanization",
+          category: "style",
           isDefault: false
         },
         {
           name: "Backtrack once",
           instructions: "Correct or refine a statement partway through: 'Actually, more precisely...'",
           description: "Correct or refine a statement partway through: 'Actually, more precisely...'",
-          category: "humanization",
+          category: "style",
           isDefault: false
         }
       ];
