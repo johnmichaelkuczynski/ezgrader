@@ -11,10 +11,12 @@ import { loadStripe } from '@stripe/stripe-js';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
+// Match the backend TOKEN_PRICING system exactly
 const pricingTiers = [
-  { id: "10", price: 10, credits: 10, popular: false },
-  { id: "50", price: 50, credits: 50, popular: true },
-  { id: "100", price: 100, credits: 100, popular: false },
+  { id: "5", price: 5, credits: 5000, popular: false },
+  { id: "10", price: 10, credits: 20000, popular: true },
+  { id: "100", price: 100, credits: 500000, popular: false },
+  { id: "1000", price: 1000, credits: 10000000, popular: false },
 ];
 
 export default function Pricing() {
@@ -49,10 +51,10 @@ export default function Pricing() {
       const r = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': String(userId)
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ priceTier: tier })
+        credentials: 'include', // Use session authentication only
+        body: JSON.stringify({ tier: tier }) // Use 'tier' to match purchaseSchema
       });
       const data = await r.json();
 
@@ -134,7 +136,7 @@ export default function Pricing() {
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl font-bold">${tier.price}</CardTitle>
                 <CardDescription>
-                  {tier.credits} credits
+                  {tier.credits.toLocaleString()} credits
                 </CardDescription>
               </CardHeader>
               
