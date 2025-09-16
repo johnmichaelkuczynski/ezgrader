@@ -1,0 +1,102 @@
+1. Mixed cadence + clause sprawl
+Alternate short and long sentences; allow some long sentences to wander with extra clauses.
+
+2. Asymmetric emphasis
+Over-elaborate one point; compress or skate past another.
+
+3. One aside
+Add a quick parenthetical or em-dash remark — factual, not jokey.
+
+4. Hedge twice
+Use two mild uncertainty markers (“probably,” “seems,” “roughly,” “I think”).
+
+5. Local disfluency
+Keep one redundant or slightly awkward phrase that still makes sense.
+
+6. Analogy injection
+Insert a short, concrete comparison to something unrelated but illustrative.
+
+7. Topic snap
+Abruptly shift focus once, then return.
+
+8. Friction detail
+Drop in a small, seemingly unnecessary but real-world-plausible detail.
+
+Structure & Cadence
+Compression — light (−15%): Cut filler; merge short clauses; keep meaning.
+
+Compression — medium (−30%): Trim hard; delete throat-clearing; tighten syntax.
+
+Compression — heavy (−45%): Sever redundancies; collapse repeats; keep core claims.
+
+DECREASE BY 50%: REDUCE THE LENGTH BY HALF WHILE PRESERVING MEANING 
+
+INCREASE BY 150%: EXPAND THE TEXT TO 150% LONGER WITH ADDITIONAL DETAIL AND ELABORATION
+
+Mixed cadence: Alternate 5–35-word sentences; no uniform rhythm.
+
+Clause surgery: Reorder main/subordinate clauses in 30% of sentences.
+
+Front-load claim: Put the main conclusion in sentence 1; support follows.
+
+Back-load claim: Delay the conclusion to the final 2–3 sentences.
+
+Seam/pivot: Drop smooth connectors once; abrupt turn is fine.
+
+Framing & Inference
+Imply one step: Omit an obvious inferential step; leave it implicit.
+
+Conditional framing: Recast one key sentence as “If/Unless …, then …”.
+
+Local contrast: Use “but/except/aside” once to mark a boundary—no new facts.
+
+Scope check: Replace one absolute with a bounded form (“in cases like these”).
+
+Diction & Tone
+Deflate jargon: Swap nominalizations for verbs where safe (e.g., “utilization” → “use”).
+
+Kill stock transitions: Delete “Moreover/Furthermore/In conclusion” everywhere.
+
+Hedge once: Use exactly one: “probably/roughly/more or less.”
+
+Drop intensifiers: Remove “very/clearly/obviously/significantly.”
+
+Low-heat voice: Prefer plain verbs; avoid showy synonyms.
+
+One aside: One short parenthetical or em-dash aside; keep it factual.
+
+Concreteness & Benchmarks
+Concrete benchmark: Replace one vague scale with a testable one (e.g., “enough to X”).
+
+Swap generic example: If the source has an example, make it slightly more specific; else skip.
+
+Metric nudge: Replace “more/better” with a minimal, source-safe comparator (“more than last case”).
+
+Asymmetry & Focus
+Asymmetric emphasis: Linger on the main claim; compress secondary points sharply.
+
+Cull repeats: Delete duplicated sentences/ideas; keep the strongest instance.
+
+Topic snap: Change focus abruptly once; no recap.
+
+Formatting & Output Hygiene
+No lists: Force continuous prose; remove bullets/numbering.
+
+No meta: No prefaces, apologies, or “as requested” scaffolding.
+
+Exact nouns: Replace vague pronouns where antecedent is ambiguous.
+
+Quote once: If the source contains a strong phrase, quote it once; else skip.
+
+Safety / Guardrails
+Claim lock: Do not add examples, scenarios, or data not present in the source.
+
+Entity lock: Keep names, counts, and attributions exactly as given.
+
+Combo presets (one-liners)
+Lean & Sharp: Compression-medium + mixed cadence + imply one step + kill stock transitions.
+
+Analytic: Clause surgery + front-load claim + scope check + exact nouns + no lists.
+
+I REPEAT: IT IS TO MADE CLEAR THAT OF ALL THE ABOVE PRESETS, 1-8 ARE THE MOST LIKELY TO LEAD TO SUCCESSFUL HUMANIZATIONS; THE OTHERS
+ARE FOR STYLISTIC TWEEKS. 
