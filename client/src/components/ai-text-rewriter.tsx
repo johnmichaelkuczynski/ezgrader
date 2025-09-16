@@ -307,6 +307,7 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
   const [isUploading, setIsUploading] = useState(false);
   
   const [inputAiScore, setInputAiScore] = useState<number | null>(null);
+  const [styleSampleAiScore, setStyleSampleAiScore] = useState<number | null>(null);
   const [outputAiScore, setOutputAiScore] = useState<number | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   
@@ -339,6 +340,19 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     return () => clearTimeout(analyzeInputDebounced);
   }, [inputText]);
 
+  // Automatically analyze style sample when it changes
+  useEffect(() => {
+    const analyzeStyleSampleDebounced = setTimeout(() => {
+      if (styleSample.trim()) {
+        handleAnalyzeText(styleSample, 'styleSample');
+      } else {
+        setStyleSampleAiScore(null);
+      }
+    }, 1000);
+
+    return () => clearTimeout(analyzeStyleSampleDebounced);
+  }, [styleSample]);
+
   // Automatically analyze output text when it changes
   useEffect(() => {
     const analyzeOutputDebounced = setTimeout(() => {
@@ -352,7 +366,7 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     return () => clearTimeout(analyzeOutputDebounced);
   }, [outputText]);
 
-  const handleAnalyzeText = async (text: string, type: 'input' | 'output') => {
+  const handleAnalyzeText = async (text: string, type: 'input' | 'styleSample' | 'output') => {
     if (!text.trim()) return null;
     
     setIsAnalyzing(true);
@@ -362,6 +376,8 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
       
       if (type === 'input') {
         setInputAiScore(data.aiScore);
+      } else if (type === 'styleSample') {
+        setStyleSampleAiScore(data.aiScore);
       } else {
         setOutputAiScore(data.aiScore);
       }
@@ -748,7 +764,14 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
 
                 {/* Box B - Style Sample */}
                 <div className="space-y-2">
-                  <Label htmlFor="style-sample">Box B - Style Sample</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="style-sample">Box B - Style Sample</Label>
+                    {styleSampleAiScore !== null && (
+                      <span className="text-xs text-muted-foreground">
+                        {styleSampleAiScore}% AI
+                      </span>
+                    )}
+                  </div>
                   <Textarea
                     id="style-sample"
                     placeholder="Enter text whose writing style you want to mimic..."
