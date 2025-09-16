@@ -107,6 +107,11 @@ This is a full-stack web application called "Grading Pro" - an AI-powered educat
 
 ```
 Changelog:
+- September 16, 2025: Fixed assignment save functionality to properly update existing assignments instead of creating duplicates
+- September 16, 2025: Resolved Stripe checkout authentication issues by adding /api/whoami endpoint and proper user authentication flow
+- September 16, 2025: Updated all LLM provider labels to ZHI branding (OpenAI→ZHI 1, Anthropic→ZHI 2, DeepSeek→ZHI 3, Perplexity→ZHI 4)
+- September 16, 2025: Set ZHI 1 (OpenAI with GPT-4o) as the default LLM provider for all functions
+- September 16, 2025: Enhanced error handling and debugging for payment processing system
 - January 17, 2025: Enhanced keyboard navigation with comprehensive shortcuts across all input fields
   * Added Ctrl+Enter to grade submission in student text area (minimum 50 characters required)
   * Added Ctrl+Enter to move to next field in assignment prompt and grading instructions areas
