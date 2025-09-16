@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Download, Upload, Wand2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Download, Upload, Wand2, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
@@ -30,10 +31,20 @@ interface StyleSample {
   isDefault: boolean;
 }
 
+interface InstructionPreset {
+  id: number;
+  name: string;
+  instructions: string;
+  description?: string;
+  category: string;
+  isDefault: boolean;
+}
+
 export default function AITextRewriter({ className }: AITextRewriterProps) {
   const [inputText, setInputText] = useState("");
   const [styleSample, setStyleSample] = useState("");
   const [selectedStyleSampleId, setSelectedStyleSampleId] = useState<number | null>(null);
+  const [selectedPresets, setSelectedPresets] = useState<number[]>([]);
   const [outputText, setOutputText] = useState("");
   const [customInstructions, setCustomInstructions] = useState("");
   const [llmProvider, setLlmProvider] = useState("anthropic"); // Default to Anthropic
@@ -43,6 +54,7 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
   const [isRewriting, setIsRewriting] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingStyleSample, setIsUploadingStyleSample] = useState(false);
   
   const [inputAiScore, setInputAiScore] = useState<number | null>(null);
   const [outputAiScore, setOutputAiScore] = useState<number | null>(null);
@@ -50,9 +62,13 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
   
   const { toast } = useToast();
 
-  // Fetch style samples from backend
+  // Fetch style samples and instruction presets from backend
   const { data: styleSamples = [], isLoading: isLoadingStyleSamples } = useQuery<StyleSample[]>({
     queryKey: ["/api/ai-rewriter/style-samples"],
+  });
+
+  const { data: instructionPresets = [], isLoading: isLoadingPresets } = useQuery<InstructionPreset[]>({
+    queryKey: ["/api/ai-rewriter/instruction-presets"],
   });
 
   // Handle style sample selection
@@ -68,6 +84,33 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
         setStyleSample(sample.content);
       }
     }
+  };
+
+  // Handle preset selection
+  const handlePresetToggle = (presetId: number) => {
+    setSelectedPresets(prev => {
+      if (prev.includes(presetId)) {
+        return prev.filter(id => id !== presetId);
+      } else {
+        return [...prev, presetId];
+      }
+    });
+  };
+
+  // Build combined custom instructions from selected presets
+  const buildCustomInstructions = () => {
+    const selectedPresetInstructions = selectedPresets
+      .map(id => instructionPresets.find(p => p.id === id)?.instructions)
+      .filter(Boolean)
+      .join('. ');
+    
+    const userInstructions = customInstructions.trim();
+    
+    if (selectedPresetInstructions && userInstructions) {
+      return `${selectedPresetInstructions}. ${userInstructions}`;
+    }
+    
+    return selectedPresetInstructions || userInstructions || null;
   };
 
   // Set default style sample when samples are loaded
@@ -124,7 +167,7 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
       const response = await apiRequest("POST", "/api/ai-rewriter/rewrite", {
         inputText: inputText.trim(),
         styleSample: styleSample.trim() || null,
-        customInstructions: customInstructions.trim() || null,
+        customInstructions: buildCustomInstructions(),
         llmProvider,
         llmModel,
         temperature,
@@ -191,6 +234,45 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }
   };
 
+  const handleStyleSampleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingStyleSample(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/ai-rewriter/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const result = await response.json();
+      setStyleSample(result.content);
+      setSelectedStyleSampleId(null); // Switch to custom when uploading
+      
+      toast({
+        title: "Style Sample Uploaded",
+        description: `Loaded ${result.wordCount} words for style reference`,
+      });
+
+    } catch (error: any) {
+      console.error("Error uploading style sample:", error);
+      toast({
+        title: "Upload Error",
+        description: error.message || "Failed to upload style sample",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUploadingStyleSample(false);
+    }
+  };
+
   const handleDownload = async (format: 'pdf' | 'docx' | 'txt') => {
     if (!outputText.trim()) {
       toast({
@@ -252,76 +334,17 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
             Rewrite content to exactly match the style of your reference text at the most granular level possible.
           </p>
         </CardHeader>
-        <CardContent className="space-y-6">
-          {/* LLM Provider Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="llm-provider">LLM Provider</Label>
-            <Select value={llmProvider} onValueChange={setLlmProvider}>
-              <SelectTrigger data-testid="select-llm-provider">
-                <SelectValue placeholder="Select LLM Provider" />
-              </SelectTrigger>
-              <SelectContent>
-                {LLM_PROVIDERS.map((provider) => (
-                  <SelectItem key={provider.value} value={provider.value}>
-                    {provider.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Three Main Boxes Layout */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Box A - Input Text */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="input-text">Box A - Input Text</Label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="file"
-                    accept=".pdf,.docx,.txt"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="file-upload"
-                    data-testid="input-file-upload"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => document.getElementById("file-upload")?.click()}
-                    disabled={isUploading}
-                    data-testid="button-upload-file"
-                  >
-                    {isUploading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Upload className="h-4 w-4" />
-                    )}
-                  </Button>
-                  {inputAiScore !== null && (
-                    <span className="text-xs text-muted-foreground">
-                      {inputAiScore}% AI
-                    </span>
-                  )}
-                </div>
-              </div>
-              <Textarea
-                id="input-text"
-                placeholder="Enter or upload text to be rewritten..."
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                className="min-h-[300px] font-mono text-sm"
-                data-testid="textarea-input-text"
-              />
-            </div>
-
-            {/* Box B - Style Sample */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="style-sample">Box B - Style Sample</Label>
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Left Sidebar */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Writing Samples */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm">Writing Samples</h3>
                 <Select value={selectedStyleSampleId?.toString() || "custom"} onValueChange={handleStyleSampleChange}>
-                  <SelectTrigger className="w-[200px]" data-testid="select-style-sample">
-                    <SelectValue placeholder="Select sample" />
+                  <SelectTrigger data-testid="select-style-sample">
+                    <SelectValue placeholder="Select writing sample" />
+                    <ChevronDown className="h-4 w-4" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="custom">Custom Text</SelectItem>
@@ -339,106 +362,248 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
                     )}
                   </SelectContent>
                 </Select>
+                {selectedStyleSampleId && (
+                  <div className="text-xs text-muted-foreground">
+                    {styleSamples.find(s => s.id === selectedStyleSampleId)?.description || "Click to preview writing style"}
+                  </div>
+                )}
               </div>
-              <Textarea
-                id="style-sample"
-                placeholder="Enter text whose writing style you want to mimic..."
-                value={styleSample}
-                onChange={(e) => {
-                  setStyleSample(e.target.value);
-                  setSelectedStyleSampleId(null); // Switch to custom when manually editing
-                }}
-                className="min-h-[300px] font-mono text-sm"
-                data-testid="textarea-style-sample"
-              />
-            </div>
 
-            {/* Box C - Output Text */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="output-text">Box C - Rewritten Output</Label>
-                <div className="flex items-center gap-2">
-                  {outputAiScore !== null && (
-                    <span className="text-xs text-muted-foreground">
-                      {outputAiScore}% AI
-                    </span>
+              {/* Style Presets */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm">Style Presets</h3>
+                <p className="text-xs text-muted-foreground">
+                  Presets 1-8 are most effective for humanization
+                </p>
+                <div className="space-y-3">
+                  {isLoadingPresets ? (
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">Loading presets...</span>
+                    </div>
+                  ) : (
+                    instructionPresets.map((preset) => (
+                      <div key={preset.id} className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`preset-${preset.id}`}
+                            checked={selectedPresets.includes(preset.id)}
+                            onCheckedChange={() => handlePresetToggle(preset.id)}
+                            data-testid={`checkbox-preset-${preset.id}`}
+                          />
+                          <label
+                            htmlFor={`preset-${preset.id}`}
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                          >
+                            {preset.name}
+                            {preset.isDefault && <span className="ml-1 text-red-500">★</span>}
+                          </label>
+                        </div>
+                        {preset.description && (
+                          <p className="text-xs text-muted-foreground ml-6">
+                            {preset.description}
+                          </p>
+                        )}
+                      </div>
+                    ))
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload('txt')}
-                    disabled={!outputText}
-                    data-testid="button-download-txt"
-                  >
-                    <Download className="h-4 w-4" />
-                    TXT
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload('docx')}
-                    disabled={!outputText}
-                    data-testid="button-download-docx"
-                  >
-                    <Download className="h-4 w-4" />
-                    DOCX
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleDownload('pdf')}
-                    disabled={!outputText}
-                    data-testid="button-download-pdf"
-                  >
-                    <Download className="h-4 w-4" />
-                    PDF
-                  </Button>
                 </div>
               </div>
-              <Textarea
-                id="output-text"
-                placeholder="Rewritten text will appear here..."
-                value={outputText}
-                readOnly
-                className="min-h-[300px] font-mono text-sm bg-muted"
-                data-testid="textarea-output-text"
-              />
+
+              {/* LLM Provider Selection */}
+              <div className="space-y-2">
+                <Label htmlFor="llm-provider">LLM Provider</Label>
+                <Select value={llmProvider} onValueChange={setLlmProvider}>
+                  <SelectTrigger data-testid="select-llm-provider">
+                    <SelectValue placeholder="Select LLM Provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LLM_PROVIDERS.map((provider) => (
+                      <SelectItem key={provider.value} value={provider.value}>
+                        {provider.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
 
-          {/* Custom Instructions */}
-          <div className="space-y-2">
-            <Label htmlFor="custom-instructions">Custom Instructions (Optional)</Label>
-            <Textarea
-              id="custom-instructions"
-              placeholder="Add any specific instructions for the rewriting process..."
-              value={customInstructions}
-              onChange={(e) => setCustomInstructions(e.target.value)}
-              className="min-h-[80px]"
-              data-testid="textarea-custom-instructions"
-            />
-          </div>
+            {/* Main Content Area */}
+            <div className="lg:col-span-3 space-y-6">
+              {/* Three Main Boxes Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Box A - Input Text */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="input-text">Box A - Input Text</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="file-upload"
+                        data-testid="input-file-upload"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById("file-upload")?.click()}
+                        disabled={isUploading}
+                        data-testid="button-upload-file"
+                      >
+                        {isUploading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                      </Button>
+                      {inputAiScore !== null && (
+                        <span className="text-xs text-muted-foreground">
+                          {inputAiScore}% AI
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <Textarea
+                    id="input-text"
+                    placeholder="Enter or upload text to be rewritten..."
+                    value={inputText}
+                    onChange={(e) => setInputText(e.target.value)}
+                    className="min-h-[300px] font-mono text-sm"
+                    data-testid="textarea-input-text"
+                  />
+                </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-center gap-4">
-            <Button
-              onClick={handleRewrite}
-              disabled={isRewriting || !inputText.trim()}
-              className="px-8"
-              data-testid="button-rewrite"
-            >
-              {isRewriting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Rewriting...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Rewrite Text
-                </>
-              )}
-            </Button>
+                {/* Box B - Style Sample */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="style-sample">Box B - Style Sample</Label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.txt"
+                        onChange={handleStyleSampleUpload}
+                        className="hidden"
+                        id="style-sample-upload"
+                        data-testid="input-style-sample-upload"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => document.getElementById("style-sample-upload")?.click()}
+                        disabled={isUploadingStyleSample}
+                        data-testid="button-upload-style-sample"
+                      >
+                        {isUploadingStyleSample ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Upload className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                  <Textarea
+                    id="style-sample"
+                    placeholder="Select from dropdown or upload your own style sample..."
+                    value={styleSample}
+                    onChange={(e) => {
+                      setStyleSample(e.target.value);
+                      setSelectedStyleSampleId(null); // Switch to custom when manually editing
+                    }}
+                    className="min-h-[300px] font-mono text-sm"
+                    data-testid="textarea-style-sample"
+                  />
+                </div>
+
+                {/* Box C - Output Text */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="output-text">Box C - Rewritten Output</Label>
+                    <div className="flex items-center gap-2">
+                      {outputAiScore !== null && (
+                        <span className="text-xs text-muted-foreground">
+                          {outputAiScore}% AI
+                        </span>
+                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownload('txt')}
+                        disabled={!outputText}
+                        data-testid="button-download-txt"
+                      >
+                        <Download className="h-4 w-4" />
+                        TXT
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownload('docx')}
+                        disabled={!outputText}
+                        data-testid="button-download-docx"
+                      >
+                        <Download className="h-4 w-4" />
+                        DOCX
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownload('pdf')}
+                        disabled={!outputText}
+                        data-testid="button-download-pdf"
+                      >
+                        <Download className="h-4 w-4" />
+                        PDF
+                      </Button>
+                    </div>
+                  </div>
+                  <Textarea
+                    id="output-text"
+                    placeholder="Rewritten text will appear here..."
+                    value={outputText}
+                    readOnly
+                    className="min-h-[300px] font-mono text-sm bg-muted"
+                    data-testid="textarea-output-text"
+                  />
+                </div>
+              </div>
+
+              {/* Custom Instructions */}
+              <div className="space-y-2">
+                <Label htmlFor="custom-instructions">Custom Instructions (Optional)</Label>
+                <Textarea
+                  id="custom-instructions"
+                  placeholder="Add any specific instructions for the rewriting process..."
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  className="min-h-[80px]"
+                  data-testid="textarea-custom-instructions"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-center gap-4">
+                <Button
+                  onClick={handleRewrite}
+                  disabled={isRewriting || !inputText.trim()}
+                  className="px-8"
+                  data-testid="button-rewrite"
+                >
+                  {isRewriting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Rewriting...
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="mr-2 h-4 w-4" />
+                      Rewrite Text
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

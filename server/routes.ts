@@ -2942,16 +2942,82 @@ or
         }
       ];
 
+      const instructionPresets = [
+        {
+          name: "Mixed cadence + clause sprawl",
+          instructions: "Alternate short and long sentences; allow some long sentences to wander with extra clauses",
+          description: "Alternate short and long sentences; allow some long sentences to wander with extra clauses.",
+          category: "humanization",
+          isDefault: true
+        },
+        {
+          name: "Asymmetric emphasis",
+          instructions: "Over-elaborate one point; compress or skate past another",
+          description: "Over-elaborate one point; compress or skate past another.",
+          category: "humanization",
+          isDefault: true
+        },
+        {
+          name: "One aside",
+          instructions: "Add a quick parenthetical or em-dash remark — factual, not jokey",
+          description: "Add a quick parenthetical or em-dash remark — factual, not jokey.",
+          category: "humanization",
+          isDefault: true
+        },
+        {
+          name: "Hedge twice",
+          instructions: "Use two mild uncertainty markers ('probably,' 'seems,' 'roughly,' 'I think')",
+          description: "Use two mild uncertainty markers ('probably,' 'seems,' 'roughly,' 'I think').",
+          category: "humanization",
+          isDefault: true
+        },
+        {
+          name: "Local disfluency",
+          instructions: "Keep one redundant or slightly awkward phrase that still makes sense",
+          description: "Keep one redundant or slightly awkward phrase that still makes sense.",
+          category: "humanization",
+          isDefault: true
+        },
+        {
+          name: "Mild tangent",
+          instructions: "Include one brief related observation that doesn't perfectly fit",
+          description: "Include one brief related observation that doesn't perfectly fit.",
+          category: "humanization",
+          isDefault: false
+        },
+        {
+          name: "Inconsistent register",
+          instructions: "Mix slightly formal and casual language within the same text",
+          description: "Mix slightly formal and casual language within the same text.",
+          category: "humanization",
+          isDefault: false
+        },
+        {
+          name: "Backtrack once",
+          instructions: "Correct or refine a statement partway through: 'Actually, more precisely...'",
+          description: "Correct or refine a statement partway through: 'Actually, more precisely...'",
+          category: "humanization",
+          isDefault: false
+        }
+      ];
+
       const createdSamples = [];
       for (const sample of initialSamples) {
         const created = await storage.createStyleSample(sample);
         createdSamples.push(created);
       }
 
+      const createdPresets = [];
+      for (const preset of instructionPresets) {
+        const created = await storage.createInstructionPreset(preset);
+        createdPresets.push(created);
+      }
+
       res.json({ 
-        message: "Style samples seeded successfully", 
+        message: "Style samples and instruction presets seeded successfully", 
         samples: createdSamples,
-        count: createdSamples.length 
+        presets: createdPresets,
+        count: createdSamples.length + createdPresets.length
       });
     } catch (error) {
       console.error('Seed style samples error:', error);
