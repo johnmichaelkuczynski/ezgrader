@@ -5,8 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-// PayPal temporarily disabled due to authentication issues
-// import PayPalButton from "@/components/PayPalButton";
+import PayPalButton from "@/components/PayPalButton";
 
 // Load Stripe properly using loadStripe
 import { loadStripe } from '@stripe/stripe-js';
@@ -76,8 +75,8 @@ export default function Pricing() {
       return;
     }
 
-    // PayPal temporarily disabled
-    // await createPayPalOrder(tier);
+    // Prepare PayPal session before attempting Stripe
+    await createPayPalOrder(tier);
 
     // 2) Create checkout session and navigate
     try {
@@ -221,13 +220,24 @@ export default function Pricing() {
                     ) : (
                       <div className="flex items-center">
                         <CreditCard className="h-4 w-4 mr-2" />
-                        Purchase Credits
+                        Pay with Card
                       </div>
                     )}
                   </Button>
                   
+                  <div className="text-center text-sm text-gray-500 mb-2">or</div>
+                  
+                  <div className="w-full">
+                    <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 text-center">
+                      <div className="text-sm text-gray-500 dark:text-gray-400 mb-2">PayPal Payment</div>
+                      <div className="text-xs text-orange-600 dark:text-orange-400">
+                        ⚠️ Temporarily unavailable while updating credentials
+                      </div>
+                    </div>
+                  </div>
+                  
                   <div className="mt-2 text-center text-xs text-gray-500">
-                    💳 Secure card payments powered by Stripe
+                    🔒 Secure payments via Stripe & PayPal
                   </div>
                 </div>
               </CardContent>
