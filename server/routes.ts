@@ -2939,17 +2939,6 @@ or
           description: "Philosophical text analyzing the nature of inferential knowledge and logical dependence relations",
           category: "philosophy",
           isDefault: true
-        },
-        {
-          name: "Raven Paradox",
-          content: `Carl Hempel's ravens paradox illustrates a fundamental problem with inductive reasoning. Consider the statement "All ravens are black." According to the logic of confirmation, observing a black raven should support this hypothesis. However, the statement is logically equivalent to "All non-black things are non-ravens." By this equivalence, observing a white shoe—which is indeed non-black and non-raven—should equally support our original hypothesis about ravens.
-
-This leads to the paradoxical conclusion that examining white shoes in our living room provides evidence about the color of ravens in the wild. While logically sound, this violates our intuitive understanding of relevant evidence. The paradox reveals the complexity inherent in inductive inference and highlights how formal logical structures can diverge from practical reasoning.
-
-Hempel proposed that the paradox dissolves when we consider the relative informativeness of different observations, but the underlying tension between logical validity and intuitive relevance remains a subject of philosophical debate.`,
-          description: "Classic philosophical text about confirmation bias and inductive reasoning",
-          category: "philosophy",
-          isDefault: false
         }
       ];
 
