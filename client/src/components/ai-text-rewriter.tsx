@@ -5,10 +5,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader2, Download, Upload, Wand2, FileText } from "lucide-react";
+import { Loader2, Download, Upload, Wand2, FileText, LogIn } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 
 // LLM Provider options for AI Text Rewriter
 const LLM_PROVIDERS = [
@@ -291,6 +293,14 @@ interface AITextRewriterProps {
 }
 
 export default function AITextRewriter({ className }: AITextRewriterProps) {
+  // Authentication state
+  const { data: authData } = useQuery({
+    queryKey: ["/api/auth/me"],
+    retry: false,
+  });
+  const user = authData?.user;
+  const isAuthenticated = !!user;
+  
   const [inputText, setInputText] = useState("");
   const [styleSample, setStyleSample] = useState("");
   const [outputText, setOutputText] = useState("");
@@ -327,8 +337,13 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }
   }, []);
 
-  // Automatically analyze input text when it changes
+  // Automatically analyze input text when it changes (only if authenticated)
   useEffect(() => {
+    if (!isAuthenticated) {
+      setInputAiScore(null);
+      return;
+    }
+    
     const analyzeInputDebounced = setTimeout(() => {
       if (inputText.trim()) {
         handleAnalyzeText(inputText, 'input');
@@ -338,10 +353,15 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }, 1000);
 
     return () => clearTimeout(analyzeInputDebounced);
-  }, [inputText]);
+  }, [inputText, isAuthenticated]);
 
-  // Automatically analyze style sample when it changes
+  // Automatically analyze style sample when it changes (only if authenticated)
   useEffect(() => {
+    if (!isAuthenticated) {
+      setStyleSampleAiScore(null);
+      return;
+    }
+    
     const analyzeStyleSampleDebounced = setTimeout(() => {
       if (styleSample.trim()) {
         handleAnalyzeText(styleSample, 'styleSample');
@@ -351,10 +371,15 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }, 1000);
 
     return () => clearTimeout(analyzeStyleSampleDebounced);
-  }, [styleSample]);
+  }, [styleSample, isAuthenticated]);
 
-  // Automatically analyze output text when it changes
+  // Automatically analyze output text when it changes (only if authenticated)
   useEffect(() => {
+    if (!isAuthenticated) {
+      setOutputAiScore(null);
+      return;
+    }
+    
     const analyzeOutputDebounced = setTimeout(() => {
       if (outputText.trim()) {
         handleAnalyzeText(outputText, 'output');
@@ -364,7 +389,7 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }, 1000);
 
     return () => clearTimeout(analyzeOutputDebounced);
-  }, [outputText]);
+  }, [outputText, isAuthenticated]);
 
   const handleAnalyzeText = async (text: string, type: 'input' | 'styleSample' | 'output') => {
     if (!text.trim()) return null;
@@ -384,8 +409,23 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
       
       return data.aiScore;
     } catch (error: any) {
-      // Handle authentication errors specifically
-      if (error.message && error.message.includes('401')) {
+      // Handle different types of errors
+      if (error.message && error.message.includes('JSON.parse')) {
+        console.error('JSON Parse error, likely authentication issue:', error);
+        if (!isAuthenticated) {
+          toast({
+            title: "Login Required", 
+            description: "Please log in to access AI detection features",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Server Error",
+            description: "Unable to communicate with server",
+            variant: "destructive"
+          });
+        }
+      } else if (error.message && error.message.includes('401')) {
         toast({
           title: "Authentication Required", 
           description: "Please log in to use AI detection",
@@ -477,8 +517,23 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     } catch (error: any) {
       console.error("Error rewriting text:", error);
       
-      // Handle authentication errors specifically
-      if (error.message && error.message.includes('401')) {
+      // Handle different types of errors
+      if (error.message && error.message.includes('JSON.parse')) {
+        console.error('JSON Parse error, likely authentication issue:', error);
+        if (!isAuthenticated) {
+          toast({
+            title: "Login Required", 
+            description: "Please log in for full text rewriting capabilities",
+            variant: "destructive"
+          });
+        } else {
+          toast({
+            title: "Server Error",
+            description: "Unable to communicate with server",
+            variant: "destructive"
+          });
+        }
+      } else if (error.message && error.message.includes('401')) {
         toast({
           title: "Authentication Required",
           description: "Please log in to use the AI Text Rewriter",
@@ -630,10 +685,42 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
           <CardTitle className="flex items-center gap-2">
             <Wand2 className="h-5 w-5" />
             AI Text Rewriter
+            {!isAuthenticated && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">
+                (Preview Mode)
+              </span>
+            )}
           </CardTitle>
           <p className="text-sm text-muted-foreground">
             Rewrite content to exactly match the style of your reference text at the most granular level possible.
           </p>
+          {!isAuthenticated && (
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mt-4">
+              <div className="flex items-center gap-3">
+                <LogIn className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    Login for Full Access
+                  </h4>
+                  <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+                    Currently in preview mode. Login to access AI analysis, full text rewriting, and download features.
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Link href="/login">
+                    <Button size="sm" variant="outline" data-testid="button-login">
+                      Login
+                    </Button>
+                  </Link>
+                  <Link href="/register">
+                    <Button size="sm" data-testid="button-register">
+                      Register
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">

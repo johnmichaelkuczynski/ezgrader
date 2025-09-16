@@ -2631,7 +2631,7 @@ Continue from where it left off and provide a proper ending:`;
   });
 
   // Text analysis endpoint (for direct text input)
-  app.post("/api/ai-rewriter/analyze-text", requireAuth, async (req, res) => {
+  app.post("/api/ai-rewriter/analyze-text", async (req, res) => {
     try {
       const result = gptZeroAnalysisSchema.safeParse(req.body);
       if (!result.success) {
@@ -2639,38 +2639,63 @@ Continue from where it left off and provide a proper ending:`;
       }
 
       const { text } = result.data;
-      const userId = req.session.userId!; // ! is safe because requireAuth middleware ensures this exists
+      const userId = req.session?.userId;
       
-      // Check credits for AI detection
-      const hasCredits = await checkCredits(userId, TOKEN_COSTS.aiDetection);
-      if (!hasCredits) {
-        return res.status(402).json({ message: "Insufficient credits for AI detection analysis" });
-      }
-
-      const gptZeroResult = await gptZeroService.analyzeText(text);
+      let finalResponse;
+      let creditsDeducted = 0;
+      let isPreview = false;
+      
       const wordCount = text.trim().split(/\s+/).length;
       
-      // Generate chunks if text is long enough
-      const chunks = wordCount > 500 ? textChunkerService.chunkText(text) : [];
-      
-      // Analyze chunks if they exist
-      if (chunks.length > 0) {
-        const chunkTexts = chunks.map(chunk => chunk.content);
-        const chunkResults = await gptZeroService.analyzeBatch(chunkTexts);
+      // For authenticated users with sufficient credits
+      if (userId && await checkCredits(userId, TOKEN_COSTS.aiDetection)) {
+        // Full functionality for authenticated users with credits
+        const gptZeroResult = await gptZeroService.analyzeText(text);
         
-        chunks.forEach((chunk, index) => {
-          (chunk as any).aiScore = chunkResults[index].aiScore;
-        });
+        // Generate chunks if text is long enough
+        const chunks = wordCount > 500 ? textChunkerService.chunkText(text) : [];
+        
+        // Analyze chunks if they exist
+        if (chunks.length > 0) {
+          const chunkTexts = chunks.map(chunk => chunk.content);
+          const chunkResults = await gptZeroService.analyzeBatch(chunkTexts);
+          
+          chunks.forEach((chunk, index) => {
+            (chunk as any).aiScore = chunkResults[index].aiScore;
+          });
+        }
+
+        // Deduct credits after successful analysis
+        await deductCredits(userId, TOKEN_COSTS.aiDetection, 'ai_detection', 'AI text analysis');
+        creditsDeducted = TOKEN_COSTS.aiDetection;
+
+        finalResponse = {
+          aiScore: gptZeroResult.aiScore,
+          wordCount,
+          chunks,
+          needsChunking: wordCount > 500,
+        };
+      } else {
+        // Preview mode for unauthenticated users or insufficient credits
+        const previewMessage = userId ? 
+          "Purchase credits for accurate AI detection scores" : 
+          "Login for accurate AI detection analysis";
+          
+        finalResponse = {
+          aiScore: 50, // Generic preview score
+          wordCount,
+          chunks: [], // No chunks in preview
+          needsChunking: false,
+          preview: true,
+          message: previewMessage
+        };
+        isPreview = true;
       }
-
-      // Deduct credits after successful analysis
-      await deductCredits(userId, TOKEN_COSTS.aiDetection, 'ai_detection', 'AI text analysis');
-
+      
       res.json({
-        aiScore: gptZeroResult.aiScore,
-        wordCount,
-        chunks,
-        needsChunking: wordCount > 500,
+        ...finalResponse,
+        creditsDeducted,
+        isPreview
       });
     } catch (error) {
       console.error('Text analysis error:', error);
@@ -2679,51 +2704,77 @@ Continue from where it left off and provide a proper ending:`;
   });
 
   // File upload endpoint for AI Text Rewriter
-  app.post("/api/ai-rewriter/upload", requireAuth, aiRewriteUpload.single('file'), async (req, res) => {
+  app.post("/api/ai-rewriter/upload", aiRewriteUpload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
 
-      const userId = req.session.userId!; // ! is safe because requireAuth middleware ensures this exists
+      const userId = req.session?.userId;
       
-      // Check credits for AI detection
-      const hasCredits = await checkCredits(userId, TOKEN_COSTS.aiDetection);
-      if (!hasCredits) {
-        return res.status(402).json({ message: "Insufficient credits for file analysis" });
-      }
-
+      let finalResponse;
+      let creditsDeducted = 0;
+      let isPreview = false;
+      
       await fileProcessorService.validateFile(req.file);
       const processedFile = await fileProcessorService.processFile(req.file.path, req.file.originalname);
       
-      // Analyze with GPTZero
-      const gptZeroResult = await gptZeroService.analyzeText(processedFile.content);
+      // For authenticated users with sufficient credits
+      if (userId && await checkCredits(userId, TOKEN_COSTS.aiDetection)) {
+        // Full functionality for authenticated users with credits
+        // Analyze with GPTZero
+        const gptZeroResult = await gptZeroService.analyzeText(processedFile.content);
 
-      // Generate chunks if text is long enough
-      const chunks = processedFile.wordCount > 500 
-        ? textChunkerService.chunkText(processedFile.content)
-        : [];
+        // Generate chunks if text is long enough
+        const chunks = processedFile.wordCount > 500 
+          ? textChunkerService.chunkText(processedFile.content)
+          : [];
 
-      // Analyze chunks if they exist
-      if (chunks.length > 0) {
-        const chunkTexts = chunks.map(chunk => chunk.content);
-        const chunkResults = await gptZeroService.analyzeBatch(chunkTexts);
+        // Analyze chunks if they exist
+        if (chunks.length > 0) {
+          const chunkTexts = chunks.map(chunk => chunk.content);
+          const chunkResults = await gptZeroService.analyzeBatch(chunkTexts);
+          
+          chunks.forEach((chunk, index) => {
+            (chunk as any).aiScore = chunkResults[index].aiScore;
+          });
+        }
+
+        // Deduct credits after successful analysis
+        await deductCredits(userId, TOKEN_COSTS.aiDetection, 'ai_detection', 'File upload and AI analysis');
+        creditsDeducted = TOKEN_COSTS.aiDetection;
+
+        finalResponse = {
+          filename: processedFile.filename,
+          content: processedFile.content,
+          wordCount: processedFile.wordCount,
+          chunks,
+          aiScore: gptZeroResult.aiScore,
+          needsChunking: processedFile.wordCount > 500,
+        };
+      } else {
+        // Preview mode for unauthenticated users or insufficient credits
+        const previewMessage = userId ? 
+          "Purchase credits for file AI analysis" : 
+          "Login for file AI analysis capabilities";
         
-        chunks.forEach((chunk, index) => {
-          (chunk as any).aiScore = chunkResults[index].aiScore;
-        });
+        finalResponse = {
+          filename: processedFile.filename,
+          content: processedFile.content,
+          wordCount: processedFile.wordCount,
+          chunks: [], // No chunks in preview
+          aiScore: 50, // Generic preview score
+          needsChunking: false,
+          preview: true,
+          message: previewMessage
+        };
+        isPreview = true;
       }
-
-      // Deduct credits after successful analysis
-      await deductCredits(userId, TOKEN_COSTS.aiDetection, 'ai_detection', 'File upload and AI analysis');
-
+      
       res.json({
-        filename: processedFile.filename,
-        content: processedFile.content,
-        wordCount: processedFile.wordCount,
-        chunks,
-        aiScore: gptZeroResult.aiScore,
-        needsChunking: processedFile.wordCount > 500,
+        ...finalResponse,
+        creditsDeducted,
+        isPreview
       });
     } catch (error) {
       console.error('File upload error:', error);
@@ -2732,7 +2783,7 @@ Continue from where it left off and provide a proper ending:`;
   });
 
   // Main rewrite endpoint
-  app.post("/api/ai-rewriter/rewrite", requireAuth, async (req, res) => {
+  app.post("/api/ai-rewriter/rewrite", async (req, res) => {
     try {
       const result = rewriteRequestSchema.safeParse(req.body);
       if (!result.success) {
@@ -2740,65 +2791,96 @@ Continue from where it left off and provide a proper ending:`;
       }
 
       const rewriteRequest = result.data;
-      const userId = req.session.userId!; // ! is safe because requireAuth middleware ensures this exists
+      const userId = req.session?.userId;
       
-      // Check credits for text rewriting
-      const hasCredits = await checkCredits(userId, TEXT_REWRITE_COST);
-      if (!hasCredits) {
-        return res.status(402).json({ message: "Insufficient credits for text rewriting" });
-      }
-
-      // Analyze input text
-      const inputAnalysis = await gptZeroService.analyzeText(rewriteRequest.inputText);
+      let finalResponse;
+      let creditsDeducted = 0;
+      let isPreview = false;
       
-      // Create rewrite session
-      const sessionData = {
-        userId: userId,
-        inputText: rewriteRequest.inputText,
-        styleSample: rewriteRequest.styleSample || null,
-        contextReference: rewriteRequest.contextReference || null,
-        customInstructions: rewriteRequest.customInstructions || null,
-        llmProvider: rewriteRequest.llmProvider,
-        llmModel: rewriteRequest.llmModel,
-        temperature: rewriteRequest.temperature || 0.7,
-      };
-
-      const session = await storage.createRewriteSession(sessionData);
-
-      try {
-        // Perform rewrite
-        const rewrittenText = await aiProviderService.rewrite(rewriteRequest.llmProvider, {
+      // For authenticated users with sufficient credits
+      if (userId && await checkCredits(userId, TEXT_REWRITE_COST)) {
+        // Full functionality for authenticated users with credits
+        // Analyze input text
+        const inputAnalysis = await gptZeroService.analyzeText(rewriteRequest.inputText);
+        
+        // Create rewrite session
+        const sessionData = {
+          userId: userId,
           inputText: rewriteRequest.inputText,
-          styleText: rewriteRequest.styleSample,
-          contentMixText: rewriteRequest.contextReference,
-          customInstructions: rewriteRequest.customInstructions,
-        });
+          styleSample: rewriteRequest.styleSample || null,
+          contextReference: rewriteRequest.contextReference || null,
+          customInstructions: rewriteRequest.customInstructions || null,
+          llmProvider: rewriteRequest.llmProvider,
+          llmModel: rewriteRequest.llmModel,
+          temperature: rewriteRequest.temperature || 0.7,
+        };
 
-        // Analyze output text
-        const outputAnalysis = await gptZeroService.analyzeText(rewrittenText);
+        const session = await storage.createRewriteSession(sessionData);
 
-        // Clean markup from rewritten text
-        const cleanedRewrittenText = cleanMarkup(rewrittenText);
+        try {
+          // Perform rewrite
+          const rewrittenText = await aiProviderService.rewrite(rewriteRequest.llmProvider, {
+            inputText: rewriteRequest.inputText,
+            styleText: rewriteRequest.styleSample,
+            contentMixText: rewriteRequest.contextReference,
+            customInstructions: rewriteRequest.customInstructions,
+          });
 
-        // Store result
-        await storage.createRewriteResult({
-          sessionId: session.id,
-          chunkIndex: 0,
-          originalChunk: rewriteRequest.inputText,
-          rewrittenChunk: cleanedRewrittenText,
-          inputGptZeroScore: inputAnalysis.aiScore,
-          outputGptZeroScore: outputAnalysis.aiScore,
-        });
+          // Analyze output text
+          const outputAnalysis = await gptZeroService.analyzeText(rewrittenText);
 
-        // Deduct credits after successful rewrite
-        await deductCredits(userId, TEXT_REWRITE_COST, 'text_rewrite', 'AI text rewriting');
+          // Clean markup from rewritten text
+          const cleanedRewrittenText = cleanMarkup(rewrittenText);
 
-        res.json({
-          rewrittenText: cleanedRewrittenText,
-          inputAiScore: inputAnalysis.aiScore,
-          outputAiScore: outputAnalysis.aiScore,
-          sessionId: session.id,
-        });
+          // Store result
+          await storage.createRewriteResult({
+            sessionId: session.id,
+            chunkIndex: 0,
+            originalChunk: rewriteRequest.inputText,
+            rewrittenChunk: cleanedRewrittenText,
+            inputGptZeroScore: inputAnalysis.aiScore,
+            outputGptZeroScore: outputAnalysis.aiScore,
+          });
+
+          // Deduct credits after successful rewrite
+          await deductCredits(userId, TEXT_REWRITE_COST, 'text_rewrite', 'AI text rewriting');
+          creditsDeducted = TEXT_REWRITE_COST;
+
+          finalResponse = {
+            rewrittenText: cleanedRewrittenText,
+            inputAiScore: inputAnalysis.aiScore,
+            outputAiScore: outputAnalysis.aiScore,
+            sessionId: session.id,
+          };
+        } catch (error) {
+          console.error('Rewrite processing error:', error);
+          throw error;
+        }
+      } else {
+        // Preview mode for unauthenticated users or insufficient credits
+        const previewMessage = userId ? 
+          "Purchase credits for full text rewriting" : 
+          "Login for full text rewriting capabilities";
+        
+        // Generate a basic preview rewrite (simulated)
+        const previewRewrite = generatePreview(rewriteRequest.inputText);
+        
+        finalResponse = {
+          rewrittenText: previewRewrite,
+          inputAiScore: 50, // Generic preview score
+          outputAiScore: 45, // Generic preview score
+          sessionId: null,
+          preview: true,
+          message: previewMessage
+        };
+        isPreview = true;
+      }
+      
+      res.json({
+        ...finalResponse,
+        creditsDeducted,
+        isPreview
+      });
       } catch (error) {
         console.error('Rewrite processing error:', error);
         throw error;
@@ -2810,7 +2892,7 @@ Continue from where it left off and provide a proper ending:`;
   });
 
   // Get style samples endpoint
-  app.get("/api/ai-rewriter/style-samples", requireAuth, async (req, res) => {
+  app.get("/api/ai-rewriter/style-samples", async (req, res) => {
     try {
       const samples = await storage.getAllStyleSamples();
       res.json(samples);
@@ -2821,7 +2903,7 @@ Continue from where it left off and provide a proper ending:`;
   });
 
   // Get instruction presets endpoint
-  app.get("/api/ai-rewriter/instruction-presets", requireAuth, async (req, res) => {
+  app.get("/api/ai-rewriter/instruction-presets", async (req, res) => {
     try {
       const presets = await storage.getAllInstructionPresets();
       res.json(presets);
@@ -2832,8 +2914,17 @@ Continue from where it left off and provide a proper ending:`;
   });
 
   // Download endpoint
-  app.post("/api/ai-rewriter/download/:format", requireAuth, async (req, res) => {
+  app.post("/api/ai-rewriter/download/:format", async (req, res) => {
     try {
+      const userId = req.session?.userId;
+      
+      // Check if user is authenticated for download functionality
+      if (!userId) {
+        return res.status(401).json({ 
+          message: "Authentication required for download functionality. Please login to download files." 
+        });
+      }
+      
       const { format } = req.params;
       const { content, filename } = req.body;
       
