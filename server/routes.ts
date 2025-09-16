@@ -158,7 +158,7 @@ const memoryStorage = multer.memoryStorage();
 const uploadToDisk = multer({
   storage: diskStorage,
   limits: {
-    fileSize: 200 * 1024 * 1024, // 200MB limit
+    fileSize: 25 * 1024 * 1024, // 25MB limit
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
@@ -238,14 +238,21 @@ async function processUploadedFile(file: Express.Multer.File): Promise<string> {
             rm_spaces: true
           }));
 
+          // Add timeout protection for Mathpix OCR (30 seconds)
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 30000);
+          
           const mathpixResponse = await fetch('https://api.mathpix.com/v3/pdf', {
             method: 'POST',
             headers: {
               'app_id': process.env.MATHPIX_APP_ID!,
               'app_key': process.env.MATHPIX_APP_KEY!,
             },
-            body: formData
+            body: formData,
+            signal: controller.signal
           });
+          
+          clearTimeout(timeoutId);
 
           if (mathpixResponse.ok) {
             const mathpixResult = await mathpixResponse.json();
@@ -257,10 +264,16 @@ async function processUploadedFile(file: Express.Multer.File): Promise<string> {
           
           console.log('Mathpix failed, falling back to pdf-parse...');
           
-          // Fallback to pdf-parse
+          // Fallback to pdf-parse with timeout protection (20 seconds)
           const pdfParse = require('pdf-parse');
           const pdfBuffer = fs.readFileSync(filePath);
-          const pdfData = await pdfParse(pdfBuffer);
+          
+          const pdfParsePromise = pdfParse(pdfBuffer);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('PDF parsing timeout')), 20000)
+          );
+          
+          const pdfData = await Promise.race([pdfParsePromise, timeoutPromise]);
           
           if (pdfData.text && pdfData.text.trim().length > 10) {
             return pdfData.text;
@@ -358,39 +371,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { username, password } = result.data;
 
-      // Special bypass for testing accounts - JMKUCZYNSKI and RANDYJOHNSON can login with any password
-      if (username.toUpperCase() === 'JMKUCZYNSKI' || username.toUpperCase() === 'RANDYJOHNSON') {
-        // Find or create the special user account
-        let user = await db.select().from(users).where(eq(users.username, username.toLowerCase())).limit(1);
-        
-        if (user.length === 0) {
-          // Create the special user account with unlimited credits
-          const newUsers = await db.insert(users).values({
-            username: username.toLowerCase(),
-            password: await bcrypt.hash('bypass', 10), // Dummy password since it's bypassed
-            credits: 999999999, // Unlimited credits
-          }).returning();
-          user = newUsers;
-        } else {
-          // Ensure existing user has unlimited credits
-          await db.update(users)
-            .set({ credits: 999999999 })
-            .where(eq(users.id, user[0].id));
-        }
-
-        // Set session for special user
-        req.session.userId = user[0].id;
-        req.session.username = user[0].username;
-
-        return res.json({ 
-          message: 'Login successful',
-          user: { 
-            id: user[0].id, 
-            username: user[0].username,
-            credits: 999999999
-          }
-        });
-      }
 
       // Regular authentication for other users
       const user = await db.select().from(users).where(eq(users.username, username)).limit(1);
