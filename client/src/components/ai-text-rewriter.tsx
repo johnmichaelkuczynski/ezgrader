@@ -337,13 +337,8 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }
   }, []);
 
-  // Automatically analyze input text when it changes (only if authenticated)
+  // Automatically analyze input text when it changes
   useEffect(() => {
-    if (!isAuthenticated) {
-      setInputAiScore(null);
-      return;
-    }
-    
     const analyzeInputDebounced = setTimeout(() => {
       if (inputText.trim()) {
         handleAnalyzeText(inputText, 'input');
@@ -353,15 +348,10 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }, 1000);
 
     return () => clearTimeout(analyzeInputDebounced);
-  }, [inputText, isAuthenticated]);
+  }, [inputText]);
 
-  // Automatically analyze style sample when it changes (only if authenticated)
+  // Automatically analyze style sample when it changes
   useEffect(() => {
-    if (!isAuthenticated) {
-      setStyleSampleAiScore(null);
-      return;
-    }
-    
     const analyzeStyleSampleDebounced = setTimeout(() => {
       if (styleSample.trim()) {
         handleAnalyzeText(styleSample, 'styleSample');
@@ -371,15 +361,10 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }, 1000);
 
     return () => clearTimeout(analyzeStyleSampleDebounced);
-  }, [styleSample, isAuthenticated]);
+  }, [styleSample]);
 
-  // Automatically analyze output text when it changes (only if authenticated)
+  // Automatically analyze output text when it changes
   useEffect(() => {
-    if (!isAuthenticated) {
-      setOutputAiScore(null);
-      return;
-    }
-    
     const analyzeOutputDebounced = setTimeout(() => {
       if (outputText.trim()) {
         handleAnalyzeText(outputText, 'output');
@@ -389,7 +374,7 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     }, 1000);
 
     return () => clearTimeout(analyzeOutputDebounced);
-  }, [outputText, isAuthenticated]);
+  }, [outputText]);
 
   const handleAnalyzeText = async (text: string, type: 'input' | 'styleSample' | 'output') => {
     if (!text.trim()) return null;
@@ -409,42 +394,10 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
       
       return data.aiScore;
     } catch (error: any) {
-      // Handle different types of errors
-      if (error.message && error.message.includes('JSON.parse')) {
-        console.error('JSON Parse error, likely authentication issue:', error);
-        if (!isAuthenticated) {
-          toast({
-            title: "Login Required", 
-            description: "Please log in to access AI detection features",
-            variant: "destructive"
-          });
-        } else {
-          toast({
-            title: "Server Error",
-            description: "Unable to communicate with server",
-            variant: "destructive"
-          });
-        }
-      } else if (error.message && error.message.includes('401')) {
-        toast({
-          title: "Authentication Required", 
-          description: "Please log in to use AI detection",
-          variant: "destructive"
-        });
-      } else if (error.message && error.message.includes('402')) {
-        toast({
-          title: "Insufficient Credits",
-          description: "You need more credits for AI detection", 
-          variant: "destructive"
-        });
-      } else {
-        console.error("AI Analysis error:", error.message || error);
-        toast({
-          title: "Analysis Error",
-          description: error.message || "Failed to analyze text",
-          variant: "destructive"
-        });
-      }
+      console.error("AI Analysis error:", error);
+      
+      // Don't show error toasts for AI detection - just return null for graceful degradation
+      // Users can still use the rewriter without AI detection scores
       
       return null;
     } finally {
@@ -517,41 +470,12 @@ export default function AITextRewriter({ className }: AITextRewriterProps) {
     } catch (error: any) {
       console.error("Error rewriting text:", error);
       
-      // Handle different types of errors
-      if (error.message && error.message.includes('JSON.parse')) {
-        console.error('JSON Parse error, likely authentication issue:', error);
-        if (!isAuthenticated) {
-          toast({
-            title: "Login Required", 
-            description: "Please log in for full text rewriting capabilities",
-            variant: "destructive"
-          });
-        } else {
-          toast({
-            title: "Server Error",
-            description: "Unable to communicate with server",
-            variant: "destructive"
-          });
-        }
-      } else if (error.message && error.message.includes('401')) {
-        toast({
-          title: "Authentication Required",
-          description: "Please log in to use the AI Text Rewriter",
-          variant: "destructive"
-        });
-      } else if (error.message && error.message.includes('402')) {
-        toast({
-          title: "Insufficient Credits", 
-          description: "You need more credits for text rewriting",
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Rewrite Error",
-          description: error.message || "Failed to rewrite text",
-          variant: "destructive"
-        });
-      }
+      // Simple error handling - let the backend determine what the user can access
+      toast({
+        title: "Rewrite Error",
+        description: error.message || "Failed to rewrite text. Please try again.",
+        variant: "destructive"
+      });
     } finally {
       setIsRewriting(false);
     }
