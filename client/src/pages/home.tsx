@@ -1144,7 +1144,13 @@ export default function Home() {
 
       {/* AI Text Rewriter */}
       <div className="mt-6">
-        <AITextRewriter />
+        <AITextRewriter 
+          onSendToStudentSubmission={setStudentText}
+          onSendToBoxA={(text) => {
+            // Future: implement sending to Box A when needed
+            console.log('Text sent to Box A:', text);
+          }}
+        />
       </div>
     </div>
   );
