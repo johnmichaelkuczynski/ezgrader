@@ -9,9 +9,6 @@ import { apiRequest } from "@/lib/queryClient";
 // Load Stripe properly using loadStripe
 import { loadStripe } from '@stripe/stripe-js';
 
-console.log('VITE_STRIPE_PUBLIC_KEY:', import.meta.env.VITE_STRIPE_PUBLIC_KEY);
-console.log('VITE_STRIPE_PUBLISHABLE_KEY:', import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
-
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 const pricingTiers = [
@@ -52,48 +49,47 @@ export default function Pricing() {
       const r = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': String(userId)
+          'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({ priceTier: tier })
       });
+      
+      if (!r.ok) {
+        const errorData = await r.json();
+        throw new Error(errorData.error || `HTTP ${r.status}`);
+      }
+      
       const data = await r.json();
+      console.log('Checkout response:', data);
 
+      // Stripe checkout session created successfully
       if (data.url) {
-        window.location.assign(data.url);
+        // Use Stripe's hosted checkout URL
+        window.location.href = data.url;
         return;
       }
+      
       if (data.id) {
+        // Use Stripe.js to redirect to checkout
         const stripe = await stripePromise;
-        if (stripe) {
-          const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
-          if (error) {
-            toast({
-              title: "Error",
-              description: error.message || "Failed to redirect to checkout",
-              variant: "destructive",
-            });
-          }
-        } else {
-          toast({
-            title: "Error",
-            description: "Stripe failed to load. Please refresh and try again.",
-            variant: "destructive",
-          });
+        if (!stripe) {
+          throw new Error("Stripe failed to load");
         }
-        setLoading(null);
+        
+        const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
+        if (error) {
+          throw new Error(error.message || "Failed to redirect to checkout");
+        }
         return;
       }
-      toast({
-        title: "Error",
-        description: "Checkout init failed",
-        variant: "destructive",
-      });
-      setLoading(null);
+      
+      throw new Error("Invalid checkout response");
     } catch (e: any) {
+      console.error('Checkout error:', e);
       toast({
-        title: "Error",
-        description: e && e.message ? e.message : 'Checkout error',
+        title: "Payment Error",
+        description: e?.message || 'Failed to start checkout process',
         variant: "destructive",
       });
       setLoading(null);
