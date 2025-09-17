@@ -26,19 +26,27 @@ import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./payp
 import { Client, Environment, OrdersController } from "@paypal/paypal-server-sdk";
 import Stripe from "stripe";
 
-// Initialize Stripe
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+// Initialize Stripe with fallback to new credentials
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY_NEW || process.env.STRIPE_SECRET_KEY;
+if (!stripeSecretKey) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY or STRIPE_SECRET_KEY_NEW');
 }
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+console.log(`🔑 Using Stripe key ending in: ...${stripeSecretKey.slice(-6)}`);
+const stripe = new Stripe(stripeSecretKey, {
   apiVersion: "2025-06-30.basil",
 });
 
-// Initialize PayPal client for order verification (gracefully handle missing credentials)
-const paypalEnabled = process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET;
+// Initialize PayPal client with fallback to new credentials
+const paypalClientId = process.env.PAYPAL_CLIENT_ID_NEW || process.env.PAYPAL_CLIENT_ID;
+const paypalClientSecret = process.env.PAYPAL_CLIENT_SECRET_NEW || process.env.PAYPAL_CLIENT_SECRET;
+const paypalEnabled = paypalClientId && paypalClientSecret;
+
 if (!paypalEnabled) {
   console.log('⚠️  PayPal disabled: Missing credentials PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET');
+} else {
+  console.log(`🔑 Using PayPal Client ID ending in: ...${paypalClientId!.slice(-6)}`);
 }
+
 let paypalClient: Client | null = null;
 let paypalOrdersController: OrdersController | null = null;
 
@@ -46,8 +54,8 @@ if (paypalEnabled) {
   try {
     paypalClient = new Client({
       clientCredentialsAuthCredentials: {
-        oAuthClientId: process.env.PAYPAL_CLIENT_ID!,
-        oAuthClientSecret: process.env.PAYPAL_CLIENT_SECRET!,
+        oAuthClientId: paypalClientId!,
+        oAuthClientSecret: paypalClientSecret!,
       },
       timeout: 0,
       environment: process.env.NODE_ENV === "production" ? Environment.Production : Environment.Sandbox,
