@@ -65,12 +65,19 @@ export default function Pricing() {
 
       // Stripe checkout session created successfully
       if (data.url) {
-        // Use Stripe's hosted checkout URL
-        window.location.href = data.url;
+        console.log('Redirecting to Stripe URL:', data.url);
+        // Use Stripe's hosted checkout URL - force redirect
+        try {
+          window.location.assign(data.url);
+        } catch (redirectError) {
+          console.error('Redirect failed, trying window.open:', redirectError);
+          window.open(data.url, '_self');
+        }
         return;
       }
       
       if (data.id) {
+        console.log('Using Stripe.js redirect with session ID:', data.id);
         // Use Stripe.js to redirect to checkout
         const stripe = await stripePromise;
         if (!stripe) {
@@ -84,7 +91,7 @@ export default function Pricing() {
         return;
       }
       
-      throw new Error("Invalid checkout response");
+      throw new Error("Invalid checkout response - no url or session id");
     } catch (e: any) {
       console.error('Checkout error:', e);
       toast({
