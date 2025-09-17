@@ -17,14 +17,10 @@ app.use(session({
   }
 }));
 
-// Raw body for Stripe webhook signature verification, JSON for everything else
+// JSON for everything EXCEPT the webhook
 app.use((req, res, next) => {
-  if (req.originalUrl === '/webhook') {
-    // Stripe webhook needs raw body for signature verification
-    express.raw({ type: 'application/json', limit: '1mb' })(req, res, next);
-  } else {
-    express.json({ limit: '200mb' })(req, res, next);
-  }
+  if (req.originalUrl === '/webhook') return next();
+  express.json({ limit: '200mb' })(req, res, next);
 });
 app.use(express.urlencoded({ extended: false, limit: '200mb' }));
 

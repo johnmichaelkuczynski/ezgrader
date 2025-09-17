@@ -2,7 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-
 /* Styles for the assignment comparison feature */
 .highlight-blue {
   background-color: rgba(59, 130, 246, 0.2);

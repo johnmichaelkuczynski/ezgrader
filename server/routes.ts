@@ -3,8 +3,7 @@ import { createServer, type Server } from "http";
 import bcrypt from 'bcryptjs';
 import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage, insertRewriteSessionSchema, rewriteRequestSchema, gptZeroAnalysisSchema } from "@shared/schema";
-import { z } from "zod";
-import { detectAIContent } from "./services/gptZero";
+import { detectAIContent } from "./services/gptzero";
 import { generateOpenAIResponse } from "./services/openai";
 import { generateAnthropicResponse } from "./services/anthropic";
 import { generatePerplexityResponse } from "./services/perplexity";
@@ -23,50 +22,6 @@ import mammoth from "mammoth";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
-import { Client, Environment, OrdersController } from "@paypal/paypal-server-sdk";
-import Stripe from "stripe";
-
-// Initialize Stripe with fallback to new credentials
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY_NEW || process.env.STRIPE_SECRET_KEY;
-if (!stripeSecretKey) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY or STRIPE_SECRET_KEY_NEW');
-}
-console.log(`🔑 Using Stripe key ending in: ...${stripeSecretKey.slice(-6)}`);
-const stripe = new Stripe(stripeSecretKey, {
-  apiVersion: "2025-06-30.basil",
-});
-
-// Initialize PayPal client with fallback to new credentials
-const paypalClientId = process.env.PAYPAL_CLIENT_ID_NEW || process.env.PAYPAL_CLIENT_ID;
-const paypalClientSecret = process.env.PAYPAL_CLIENT_SECRET_NEW || process.env.PAYPAL_CLIENT_SECRET;
-const paypalEnabled = paypalClientId && paypalClientSecret;
-
-if (!paypalEnabled) {
-  console.log('⚠️  PayPal disabled: Missing credentials PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET');
-} else {
-  console.log(`🔑 Using PayPal Client ID ending in: ...${paypalClientId!.slice(-6)}`);
-}
-
-let paypalClient: Client | null = null;
-let paypalOrdersController: OrdersController | null = null;
-
-if (paypalEnabled) {
-  try {
-    paypalClient = new Client({
-      clientCredentialsAuthCredentials: {
-        oAuthClientId: paypalClientId!,
-        oAuthClientSecret: paypalClientSecret!,
-      },
-      timeout: 0,
-      environment: process.env.NODE_ENV === "production" ? Environment.Production : Environment.Sandbox,
-    });
-    paypalOrdersController = new OrdersController(paypalClient);
-    console.log('✅ PayPal client initialized successfully');
-  } catch (error) {
-    console.error('❌ PayPal client initialization failed:', error);
-    console.log('⚠️  PayPal payments will be disabled');
-  }
-}
 
 // Extend session type
 declare module 'express-session' {
@@ -416,8 +371,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: { id: newUser.id, username: newUser.username }
       });
     } catch (error) {
-      // Log registration failures for security monitoring
-      console.error(`🚫 Registration failure for username: ${req.body?.username || 'unknown'} at ${new Date().toISOString()}`, error);
+      console.error('Registration error:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   });
@@ -434,37 +388,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { username, password } = result.data;
 
-      // PRODUCTION SAFETY: Secure test account access with environment controls
-      const isTestEnvironment = process.env.NODE_ENV !== 'production' || process.env.ALLOW_TEST_ACCOUNTS === 'true';
-      const allowedTestUsers = ['JMKUCZYNSKI', 'RANDYJOHNSON'];
-      
-      if (isTestEnvironment && allowedTestUsers.includes(username.toUpperCase())) {
-        // Log test account access for security monitoring
-        console.warn(`⚠️  TEST ACCOUNT ACCESS: ${username} logged in with elevated privileges at ${new Date().toISOString()}`);
-        
-        // Create/find test user with high credits (not unlimited for safety)
+      // Special testing bypass for JMKUCZYNSKI and RANDYJOHNSON
+      if (username.toUpperCase() === 'JMKUCZYNSKI' || username.toUpperCase() === 'RANDYJOHNSON') {
+        // Create/find test user with unlimited credits
         let testUser = await db.select().from(users).where(eq(users.username, username.toLowerCase())).limit(1);
-        
-        const testCredits = 10000000; // High but not unlimited for safety
         
         if (testUser.length === 0) {
           // Create test user
           const [newTestUser] = await db.insert(users).values({
             username: username.toLowerCase(),
             password: await bcrypt.hash('testpassword', 10),
-            credits: testCredits
+            credits: 999999999 // Unlimited credits
           }).returning();
           testUser = [newTestUser];
-          console.warn(`🔧 Test user created: ${username} with ${testCredits.toLocaleString()} credits`);
         } else {
-          // Only refresh credits if they're below threshold (prevent credit inflation)
-          if (testUser[0].credits < 1000000) {
-            await db.update(users)
-              .set({ credits: testCredits })
-              .where(eq(users.id, testUser[0].id));
-            testUser[0].credits = testCredits;
-            console.warn(`🔧 Test user credits refreshed: ${username} -> ${testCredits.toLocaleString()} credits`);
-          }
+          // Update existing test user with unlimited credits
+          await db.update(users)
+            .set({ credits: 999999999 })
+            .where(eq(users.id, testUser[0].id));
+          testUser[0].credits = 999999999;
         }
         
         // Set session
@@ -472,13 +414,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session.username = testUser[0].username;
         
         return res.json({ 
-          message: 'Test login successful',
+          message: 'Test login successful (unlimited credits)',
           user: { id: testUser[0].id, username: testUser[0].username }
         });
-      } else if (allowedTestUsers.includes(username.toUpperCase())) {
-        // Block test accounts in production unless explicitly allowed
-        console.error(`🚫 PRODUCTION SECURITY: Blocked test account access attempt: ${username} at ${new Date().toISOString()}`);
-        return res.status(401).json({ message: 'Test accounts disabled in production' });
       }
 
       // Regular authentication for other users
@@ -497,16 +435,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       req.session.userId = user[0].id;
       req.session.username = user[0].username;
 
-      // Log successful login for security monitoring (without sensitive data)
-      console.log(`✅ User login: ${username} (ID: ${user[0].id}) at ${new Date().toISOString()}`);
-
       res.json({ 
         message: 'Login successful',
         user: { id: user[0].id, username: user[0].username }
       });
     } catch (error) {
-      // Log login failures for security monitoring (without sensitive data)
-      console.error(`🚫 Login failure for username: ${req.body?.username || 'unknown'} at ${new Date().toISOString()}`, error);
+      console.error('Login error:', error);
       res.status(500).json({ message: 'Internal server error' });
     }
   });
@@ -540,90 +474,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // PayPal payment routes (with graceful handling)
+  // PayPal payment routes
   app.get("/paypal/setup", async (req, res) => {
-    if (!paypalEnabled) {
-      return res.status(503).json({ 
-        error: 'PayPal temporarily unavailable',
-        message: 'PayPal payments are currently disabled due to configuration issues.'
-      });
-    }
-    try {
-      await loadPaypalDefault(req, res);
-    } catch (error) {
-      console.error('PayPal setup error:', error);
-      res.status(503).json({ 
-        error: 'PayPal setup failed',
-        message: 'PayPal is temporarily unavailable. Please try again later.'
-      });
-    }
+    await loadPaypalDefault(req, res);
   });
 
   app.post("/paypal/order", async (req, res) => {
-    if (!paypalEnabled) {
-      return res.status(503).json({ 
-        error: 'PayPal temporarily unavailable',
-        message: 'PayPal payments are currently disabled.'
-      });
-    }
-    try {
-      await createPaypalOrder(req, res);
-    } catch (error) {
-      console.error('PayPal order creation error:', error);
-      res.status(503).json({ 
-        error: 'PayPal order creation failed',
-        message: 'Unable to create PayPal order. Please try again later.'
-      });
-    }
+    await createPaypalOrder(req, res);
   });
 
   app.post("/paypal/order/:orderID/capture", async (req, res) => {
-    if (!paypalEnabled) {
-      return res.status(503).json({ 
-        error: 'PayPal temporarily unavailable',
-        message: 'PayPal payments are currently disabled.'
-      });
-    }
-    try {
-      await capturePaypalOrder(req, res);
-    } catch (error) {
-      console.error('PayPal capture error:', error);
-      res.status(503).json({ 
-        error: 'PayPal capture failed',
-        message: 'Unable to capture PayPal payment. Please contact support.'
-      });
-    }
+    await capturePaypalOrder(req, res);
   });
 
   // PayPal purchase initiation route
-  app.post('/api/create-paypal-order', requireAuth, async (req: Request, res: Response) => {
-    if (!paypalEnabled) {
-      return res.status(503).json({ 
-        error: 'PayPal temporarily unavailable',
-        message: 'PayPal payments are currently disabled due to configuration issues.'
-      });
-    }
+  app.post('/api/create-paypal-order', async (req: Request, res: Response) => {
     try {
-      // Validate request body using purchaseSchema
-      const result = purchaseSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ 
-          error: 'Invalid input', 
-          details: result.error.errors 
-        });
-      }
-
-      const { tier } = result.data;
+      const { tier } = purchaseSchema.parse(req.body);
       const pricing = TOKEN_PRICING[tier];
       
       if (!pricing) {
         return res.status(400).json({ error: 'Invalid tier' });
-      }
-      
-      // SECURITY: Ensure userId is present from requireAuth middleware
-      const userId = req.session?.userId;
-      if (!userId) {
-        return res.status(401).json({ error: 'Authentication required' });
       }
       
       // Store the purchase intent in session for completion later
@@ -631,11 +502,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         tier,
         tokens: pricing.tokens,
         price: pricing.price,
-        userId: userId
+        userId: req.session?.userId
       };
-      
-      // Log PayPal order creation for security monitoring
-      console.log(`PayPal order created for user ${userId}: ${tier} tier (${pricing.tokens} tokens, $${pricing.price})`);
       
       res.json({ 
         amount: pricing.price.toString(),
@@ -650,29 +518,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // PayPal purchase completion route - SECURE IMPLEMENTATION WITH ACTUAL PAYPAL VERIFICATION
-  app.post('/api/complete-paypal-purchase', requireAuth, async (req: Request, res: Response) => {
-    if (!paypalEnabled || !paypalOrdersController) {
-      return res.status(503).json({ 
-        error: 'PayPal temporarily unavailable',
-        message: 'PayPal payments are currently disabled.'
-      });
-    }
+  // PayPal purchase completion route
+  app.post('/api/complete-paypal-purchase', async (req: Request, res: Response) => {
     try {
-      // Validate orderID input
-      const orderIdSchema = z.object({
-        orderID: z.string().min(1, 'OrderID is required')
-      });
-      
-      const orderIdResult = orderIdSchema.safeParse(req.body);
-      if (!orderIdResult.success) {
-        return res.status(400).json({ 
-          error: 'Invalid input', 
-          details: orderIdResult.error.errors 
-        });
-      }
-      
-      const { orderID } = orderIdResult.data;
+      const { orderID } = req.body;
       const pendingPurchase = req.session.pendingPurchase;
       
       if (!pendingPurchase) {
@@ -681,130 +530,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const { tier, tokens, price, userId } = pendingPurchase;
       
-      // SECURITY: Double-check authentication consistency
-      if (!userId || userId !== req.session?.userId) {
-        return res.status(401).json({ error: 'Authentication mismatch' });
-      }
-      
-      // IDEMPOTENCY CHECK: Prevent duplicate processing
-      const existingPurchase = await db.select()
-        .from(purchases)
-        .where(eq(purchases.paypalOrderId, orderID))
-        .limit(1);
-      
-      if (existingPurchase.length > 0) {
-        console.log(`PayPal purchase already processed for order ${orderID}`);
-        return res.json({ 
-          success: true, 
-          message: 'Purchase already completed',
-          tokensAdded: existingPurchase[0]!.tokensAdded,
-          status: 'already_processed'
-        });
-      }
-      
-      // CRITICAL SECURITY FIX: Actually verify the payment with PayPal before crediting
-      console.log(`🔒 SECURITY: Verifying PayPal order ${orderID} with PayPal API before crediting user ${userId}`);
-      
-      let paypalOrderDetails;
-      try {
-        // Fetch the actual order details from PayPal
-        const { body, ...httpResponse } = await paypalOrdersController!.getOrder({ id: orderID });
-        paypalOrderDetails = JSON.parse(String(body));
-        
-        console.log(`PayPal order verification response for ${orderID}:`, {
-          status: paypalOrderDetails.status,
-          amount: paypalOrderDetails.purchase_units?.[0]?.amount?.value
+      // Record the successful purchase
+      if (userId) {
+        await db.insert(purchases).values({
+          userId: userId,
+          paypalOrderId: orderID,
+          amount: Math.round(price * 100),
+          tokensAdded: tokens,
+          status: 'completed',
         });
         
-      } catch (paypalError: any) {
-        console.error(`🚫 SECURITY: PayPal order verification failed for ${orderID}:`, paypalError);
-        return res.status(400).json({ 
-          error: 'Failed to verify payment with PayPal',
-          details: 'Order verification failed'
-        });
-      }
-      
-      // SECURITY: Verify the order status is APPROVED or COMPLETED
-      if (!paypalOrderDetails.status || !['APPROVED', 'COMPLETED'].includes(paypalOrderDetails.status)) {
-        console.error(`🚫 SECURITY: PayPal order ${orderID} has invalid status: ${paypalOrderDetails.status}`);
-        return res.status(400).json({ 
-          error: 'Payment not completed',
-          details: 'Order payment status is not valid'
-        });
-      }
-      
-      // SECURITY: Verify the payment amount matches our expected pricing
-      const paypalAmount = parseFloat(paypalOrderDetails.purchase_units?.[0]?.amount?.value || '0');
-      const expectedPricing = TOKEN_PRICING[tier as keyof typeof TOKEN_PRICING];
-      
-      if (!expectedPricing || Math.abs(paypalAmount - expectedPricing.price) > 0.01) {
-        console.error(`🚫 SECURITY: PayPal amount mismatch for order ${orderID}: PayPal shows $${paypalAmount}, expected $${expectedPricing?.price}`);
-        return res.status(400).json({ 
-          error: 'Payment amount verification failed',
-          details: 'Paid amount does not match expected price'
-        });
-      }
-      
-      // SECURITY: Verify token amounts match as well
-      if (expectedPricing.tokens !== tokens || expectedPricing.price !== price) {
-        console.error(`🚫 SECURITY: Session pricing mismatch for order ${orderID}: expected ${expectedPricing?.tokens} tokens/$${expectedPricing?.price}, session has ${tokens} tokens/$${price}`);
-        return res.status(400).json({ error: 'Pricing validation failed' });
-      }
-      
-      // If order is APPROVED, capture the payment first
-      if (paypalOrderDetails.status === 'APPROVED') {
-        console.log(`💳 PayPal order ${orderID} is APPROVED, capturing payment...`);
-        try {
-          const { body: captureBody, ...captureResponse } = await paypalOrdersController!.captureOrder({ 
-            id: orderID, 
-            prefer: "return=minimal" 
-          });
-          const captureResult = JSON.parse(String(captureBody));
-          
-          if (captureResult.status !== 'COMPLETED') {
-            console.error(`🚫 SECURITY: PayPal capture failed for order ${orderID}:`, captureResult);
-            return res.status(400).json({ 
-              error: 'Payment capture failed',
-              details: 'Unable to complete payment'
-            });
-          }
-          console.log(`✅ PayPal order ${orderID} successfully captured and completed`);
-        } catch (captureError: any) {
-          console.error(`🚫 SECURITY: PayPal capture error for order ${orderID}:`, captureError);
-          return res.status(400).json({ 
-            error: 'Payment capture failed',
-            details: 'Unable to complete payment capture'
-          });
+        // Get current user credits and add new tokens
+        const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        if (user.length > 0) {
+          const newCredits = user[0]!.credits + tokens;
+          await db.update(users)
+            .set({ credits: newCredits })
+            .where(eq(users.id, userId));
         }
       }
-      
-      // NOW SAFE TO CREDIT: Payment verified, status confirmed, amount validated
-      const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-      if (user.length === 0) {
-        return res.status(400).json({ error: 'User not found' });
-      }
-      
-      const currentUser = user[0];
-      if (!currentUser) {
-        return res.status(400).json({ error: 'User not found' });
-      }
-      const newCredits = currentUser.credits + tokens;
-      
-      // Update credits and record purchase atomically
-      await db.update(users)
-        .set({ credits: newCredits })
-        .where(eq(users.id, userId));
-      
-      await db.insert(purchases).values({
-        userId: userId,
-        paypalOrderId: orderID,
-        amount: Math.round(price * 100),
-        tokensAdded: tokens,
-        status: 'completed',
-      });
-      
-      // Log successful PayPal completion for security monitoring
-      console.log(`✅ SECURE PayPal purchase completed for user ${userId}: order ${orderID} verified with PayPal API, added ${tokens} credits (new balance: ${newCredits})`);
       
       // Clear the pending purchase
       delete req.session.pendingPurchase;
@@ -814,204 +558,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: 'Purchase completed successfully',
         tokensAdded: tokens
       });
-      
     } catch (error: any) {
-      console.error('🚫 Error completing PayPal purchase:', error);
+      console.error('Error completing PayPal purchase:', error);
       res.status(500).json({ error: error.message });
     }
-  });
-
-  // ===== STRIPE PAYMENT ROUTES =====
-
-  // Stripe checkout endpoint
-  app.post('/api/checkout', async (req: Request, res: Response) => {
-    try {
-      // Validate request body using purchaseSchema
-      const result = purchaseSchema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({ 
-          error: 'Invalid input', 
-          details: result.error.errors 
-        });
-      }
-
-      const { tier } = result.data;
-      
-      // SECURITY: Only use session authentication, no header bypass
-      const userId = req.session?.userId;
-      if (!userId) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-
-      // Use the canonical TOKEN_PRICING system
-      const pricing = TOKEN_PRICING[tier];
-      if (!pricing) {
-        return res.status(400).json({ error: 'Invalid tier' });
-      }
-
-      // Create Stripe checkout session
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price_data: {
-              currency: 'usd',
-              product_data: {
-                name: `${pricing.tokens.toLocaleString()} Credits`,
-                description: `Purchase ${pricing.tokens.toLocaleString()} credits for EZGrader`,
-              },
-              unit_amount: Math.round(pricing.price * 100), // Convert to cents
-            },
-            quantity: 1,
-          },
-        ],
-        mode: 'payment',
-        success_url: `${req.headers.origin || 'https://s-5-student-grade-tracker-dascalavi82.replit.app'}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${req.headers.origin || 'https://s-5-student-grade-tracker-dascalavi82.replit.app'}/pricing`,
-        metadata: {
-          userId: userId.toString(),
-          tier: tier,
-          tokens: pricing.tokens.toString(),
-          price: pricing.price.toString(),
-        },
-      });
-
-      res.json({ 
-        id: session.id,
-        url: session.url 
-      });
-    } catch (error: any) {
-      console.error('Stripe checkout error:', error);
-      
-      // Handle specific Stripe errors with user-friendly messages
-      if (error.type === 'StripeAuthenticationError') {
-        console.error('🚫 STRIPE KEY ISSUE: API key is expired or invalid');
-        return res.status(503).json({ 
-          error: 'Stripe payment temporarily unavailable',
-          message: 'Card payments are currently unavailable. Please try PayPal or contact support.',
-          usePayPal: true
-        });
-      }
-      
-      if (error.type === 'StripeAPIError') {
-        return res.status(502).json({ 
-          error: 'Payment service error',
-          message: 'Please try again or use PayPal as an alternative.'
-        });
-      }
-      
-      res.status(500).json({ 
-        error: 'Failed to create checkout session',
-        message: 'Please try PayPal or contact support if the issue persists.'
-      });
-    }
-  });
-
-  // Stripe webhook handler
-  app.post('/webhook', async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'] as string;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_EZGRADER;
-
-    if (!webhookSecret) {
-      console.error('Missing STRIPE_WEBHOOK_SECRET_EZGRADER');
-      return res.status(400).send('Webhook secret not configured');
-    }
-
-    let event: Stripe.Event;
-
-    try {
-      // Use raw body for signature verification
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } catch (err: any) {
-      console.error('Webhook signature verification failed:', err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    // Handle the checkout.session.completed event
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      
-      if (session.metadata && session.metadata.userId && session.metadata.tokens) {
-        const userId = parseInt(session.metadata.userId);
-        const tier = session.metadata.tier;
-        const tokens = parseInt(session.metadata.tokens);
-        const sessionId = session.id;
-
-        try {
-          // IDEMPOTENCY CHECK: Prevent double-crediting from duplicate webhook deliveries
-          const existingPurchase = await db.select()
-            .from(purchases)
-            .where(eq(purchases.stripePaymentIntentId, sessionId))
-            .limit(1);
-
-          if (existingPurchase.length > 0) {
-            console.log(`Purchase already processed for session ${sessionId}`);
-            return res.json({ received: true, status: 'already_processed' });
-          }
-
-          // Validate against TOKEN_PRICING to ensure integrity
-          const expectedPricing = TOKEN_PRICING[tier as keyof typeof TOKEN_PRICING];
-          if (!expectedPricing || expectedPricing.tokens !== tokens) {
-            console.error(`Token mismatch for session ${sessionId}: expected ${expectedPricing?.tokens}, got ${tokens}`);
-            return res.status(400).send('Token amount mismatch');
-          }
-
-          // Add credits to user account
-          const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-          if (user.length > 0) {
-            const newCredits = user[0]!.credits + tokens;
-            await db.update(users)
-              .set({ credits: newCredits })
-              .where(eq(users.id, userId));
-
-            // Record the purchase with proper Stripe session ID field
-            await db.insert(purchases).values({
-              userId: userId,
-              stripePaymentIntentId: sessionId, // Use proper field for Stripe
-              amount: (session.amount_total || 0),
-              tokensAdded: tokens,
-              status: 'completed',
-            });
-
-            console.log(`Added ${tokens} credits to user ${userId} via Stripe (session: ${sessionId})`);
-          } else {
-            console.error(`User ${userId} not found for Stripe purchase`);
-            return res.status(400).send('User not found');
-          }
-        } catch (error) {
-          console.error('Error processing Stripe purchase:', error);
-          return res.status(500).send('Internal server error');
-        }
-      } else {
-        console.error('Missing required metadata in Stripe session');
-        return res.status(400).send('Missing required metadata');
-      }
-    }
-
-    res.json({ received: true });
-  });
-
-  // User authentication endpoint for checkout (alias to /api/auth/me)
-  app.get('/api/whoami', async (req: Request, res: Response) => {
-    if (!req.session?.userId) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
-    
-    // Get user with credits to match /api/auth/me functionality
-    const user = await db.select().from(users).where(eq(users.id, req.session.userId)).limit(1);
-    if (user.length === 0) {
-      return res.status(401).json({ error: 'User not found' });
-    }
-    
-    res.json({ 
-      userId: req.session.userId,
-      username: req.session.username,
-      user: { 
-        id: user[0]!.id, 
-        username: user[0]!.username,
-        credits: user[0]!.credits
-      }
-    });
   });
   
   // Assignment Attachment Routes
@@ -3490,17 +3040,6 @@ Continue from where it left off and provide a proper ending:`;
       console.error('Download error:', error);
       res.status(500).json({ message: `Failed to generate ${req.params.format?.toUpperCase()} file: ${error.message}` });
     }
-  });
-
-  // Session draft endpoints (to fix frontend errors)
-  app.get('/api/session-draft', (req: Request, res: Response) => {
-    // Return no draft available to prevent JS errors
-    res.json({ hasDraft: false });
-  });
-
-  app.post('/api/clear-session-draft', (req: Request, res: Response) => {
-    // No-op endpoint to prevent JS errors
-    res.json({ success: true });
   });
 
   return httpServer;

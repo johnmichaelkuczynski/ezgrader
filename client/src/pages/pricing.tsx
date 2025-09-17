@@ -5,64 +5,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import PayPalButton from "@/components/PayPalButton";
 
-// Match the backend TOKEN_PRICING system exactly
+// Load Stripe properly using loadStripe
+import { loadStripe } from '@stripe/stripe-js';
+
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
 const pricingTiers = [
-  { id: "5", price: 5, credits: 5000, popular: false },
-  { id: "10", price: 10, credits: 20000, popular: true },
-  { id: "100", price: 100, credits: 500000, popular: false },
-  { id: "1000", price: 1000, credits: 10000000, popular: false },
+  { id: "10", price: 10, credits: 10, popular: false },
+  { id: "50", price: 50, credits: 50, popular: true },
+  { id: "100", price: 100, credits: 100, popular: false },
 ];
 
 export default function Pricing() {
   const [loading, setLoading] = useState<string | null>(null);
-  const [paypalAvailable, setPaypalAvailable] = useState<boolean>(false);
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-
-  // Check PayPal availability on component mount
-  useEffect(() => {
-    const checkPayPalAvailability = async () => {
-      try {
-        const response = await fetch('/paypal/setup');
-        setPaypalAvailable(response.ok);
-      } catch (error) {
-        console.log('PayPal not available:', error);
-        setPaypalAvailable(false);
-      }
-    };
-    
-    checkPayPalAvailability();
-  }, []);
-
-  const createPayPalOrder = async (tier: string) => {
-    // Set up PayPal session for purchase
-    const tierData = pricingTiers.find(t => t.id === tier);
-    if (!tierData) return;
-
-    try {
-      const response = await fetch('/api/create-paypal-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ tier })
-      });
-      
-      if (response.ok) {
-        console.log('PayPal session prepared for tier:', tier);
-      } else {
-        const error = await response.json();
-        toast({
-          title: "PayPal Setup Error",
-          description: error.message || "Failed to prepare PayPal payment",
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error('PayPal session setup error:', error);
-    }
-  };
 
   const buyCredits = async (tier: string) => {
     setLoading(tier);
@@ -86,18 +44,15 @@ export default function Pricing() {
       return;
     }
 
-    // Prepare PayPal session before attempting Stripe
-    await createPayPalOrder(tier);
-
     // 2) Create checkout session and navigate
     try {
       const r = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-user-id': String(userId)
         },
-        credentials: 'include', // Use session authentication only
-        body: JSON.stringify({ tier: tier }) // Use 'tier' to match purchaseSchema
+        body: JSON.stringify({ priceTier: tier })
       });
       const data = await r.json();
 
@@ -106,35 +61,35 @@ export default function Pricing() {
         return;
       }
       if (data.id) {
-        toast({
-          title: "Card Payments Unavailable",
-          description: "Please use PayPal payment option below.",
-          variant: "destructive",
-        });
+        const stripe = await stripePromise;
+        if (stripe) {
+          const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
+          if (error) {
+            toast({
+              title: "Error",
+              description: error.message || "Failed to redirect to checkout",
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Error",
+            description: "Stripe failed to load. Please refresh and try again.",
+            variant: "destructive",
+          });
+        }
         setLoading(null);
         return;
       }
-
-      // Handle specific error responses from backend
-      if (data.usePayPal) {
-        toast({
-          title: "Card Payments Temporarily Unavailable",
-          description: data.message || "Please use PayPal payment option below.",
-          variant: "destructive",
-        });
-        setLoading(null);
-        return;
-      }
-
       toast({
-        title: "Payment Error", 
-        description: data.message || "Checkout failed. Please try PayPal below or contact support.",
+        title: "Error",
+        description: "Checkout init failed",
         variant: "destructive",
       });
       setLoading(null);
     } catch (e: any) {
       toast({
-        title: "Connection Error",
+        title: "Error",
         description: e && e.message ? e.message : 'Checkout error',
         variant: "destructive",
       });
@@ -179,7 +134,7 @@ export default function Pricing() {
               <CardHeader className="text-center">
                 <CardTitle className="text-2xl font-bold">${tier.price}</CardTitle>
                 <CardDescription>
-                  {tier.credits.toLocaleString()} credits
+                  {tier.credits} credits
                 </CardDescription>
               </CardHeader>
               
@@ -203,56 +158,31 @@ export default function Pricing() {
                   </div>
                 </div>
                 
-                <div className="space-y-3">
-                  <Button 
-                    className="w-full" 
-                    onClick={() => buyCredits(tier.id)}
-                    disabled={loading === tier.id}
-                    variant={tier.popular ? "default" : "outline"}
-                    data-testid={`button-purchase-${tier.id}`}
-                  >
-                    {loading === tier.id ? (
-                      <div className="flex items-center">
-                        <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2" />
-                        Preparing...
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Pay with Card
-                      </div>
-                    )}
-                  </Button>
-                  
-                  {paypalAvailable ? (
-                    <>
-                      <div className="text-center text-sm text-gray-500 mb-2">or</div>
-                      
-                      <div className="w-full">
-                        <PayPalButton
-                          amount={tier.price.toString()}
-                          currency="USD"
-                          intent="capture"
-                        />
-                      </div>
-                      
-                      <div className="mt-2 text-center text-xs text-gray-500">
-                        🔒 Secure payments via Stripe & PayPal
-                      </div>
-                    </>
+                <Button 
+                  className="w-full" 
+                  onClick={() => buyCredits(tier.id)}
+                  disabled={loading === tier.id}
+                  variant={tier.popular ? "default" : "outline"}
+                  data-testid={`button-purchase-${tier.id}`}
+                >
+                  {loading === tier.id ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full mr-2" />
+                      Preparing...
+                    </div>
                   ) : (
-                    <div className="mt-2 text-center text-xs text-gray-500">
-                      🔒 Secure card payments powered by Stripe
+                    <div className="flex items-center">
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Purchase Credits
                     </div>
                   )}
-                </div>
+                </Button>
               </CardContent>
             </Card>
           ))}
         </div>
-
         
-        <div className="mt-8 bg-white rounded-lg p-6 shadow-sm">
+        <div className="mt-12 bg-white rounded-lg p-6 shadow-sm">
           <h3 className="text-lg font-semibold mb-4">Storage Fees</h3>
           <p className="text-gray-600 mb-2">
             • Storage is charged at 500 tokens/month for 50,000 words
