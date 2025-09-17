@@ -3492,5 +3492,16 @@ Continue from where it left off and provide a proper ending:`;
     }
   });
 
+  // Session draft endpoints (to fix frontend errors)
+  app.get('/api/session-draft', (req: Request, res: Response) => {
+    // Return no draft available to prevent JS errors
+    res.json({ hasDraft: false });
+  });
+
+  app.post('/api/clear-session-draft', (req: Request, res: Response) => {
+    // No-op endpoint to prevent JS errors
+    res.json({ success: true });
+  });
+
   return httpServer;
 }
