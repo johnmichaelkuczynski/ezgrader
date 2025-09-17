@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage, insertRewriteSessionSchema, rewriteRequestSchema, gptZeroAnalysisSchema } from "@shared/schema";
 import { z } from "zod";
-import { detectAIContent } from "./services/gptzero";
+import { detectAIContent } from "./services/gptZero";
 import { generateOpenAIResponse } from "./services/openai";
 import { generateAnthropicResponse } from "./services/anthropic";
 import { generatePerplexityResponse } from "./services/perplexity";
