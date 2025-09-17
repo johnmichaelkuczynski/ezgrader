@@ -77,7 +77,7 @@ async function deductCredits(userId: number, tokensUsed: number, action: string,
     if (user.length === 0) return false;
     
     if (!user[0] || user[0].credits == null) return false;
-    const currentCredits = user[0].credits;
+    const currentCredits = user[0].credits!;
     const newCredits = currentCredits - tokensUsed;
     
     // Deduct from user credits
