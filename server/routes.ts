@@ -21,7 +21,6 @@ import * as path from "path";
 import mammoth from "mammoth";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
-import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
 
 // Extend session type
 declare module 'express-session' {
@@ -37,7 +36,7 @@ declare module 'express-session' {
   }
 }
 
-// Token pricing tiers (PayPal uses dollars, not cents)
+// Token pricing tiers
 const TOKEN_PRICING = {
   "5": { price: 5.00, tokens: 5000 },
   "10": { price: 10.00, tokens: 20000 },
@@ -474,95 +473,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // PayPal payment routes
-  app.get("/paypal/setup", async (req, res) => {
-    await loadPaypalDefault(req, res);
-  });
-
-  app.post("/paypal/order", async (req, res) => {
-    await createPaypalOrder(req, res);
-  });
-
-  app.post("/paypal/order/:orderID/capture", async (req, res) => {
-    await capturePaypalOrder(req, res);
-  });
-
-  // PayPal purchase initiation route
-  app.post('/api/create-paypal-order', async (req: Request, res: Response) => {
-    try {
-      const { tier } = purchaseSchema.parse(req.body);
-      const pricing = TOKEN_PRICING[tier];
-      
-      if (!pricing) {
-        return res.status(400).json({ error: 'Invalid tier' });
-      }
-      
-      // Store the purchase intent in session for completion later
-      req.session.pendingPurchase = {
-        tier,
-        tokens: pricing.tokens,
-        price: pricing.price,
-        userId: req.session?.userId
-      };
-      
-      res.json({ 
-        amount: pricing.price.toString(),
-        currency: 'USD',
-        intent: 'CAPTURE',
-        tokens: pricing.tokens,
-        tier
-      });
-    } catch (error: any) {
-      console.error('Error creating PayPal order:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // PayPal purchase completion route
-  app.post('/api/complete-paypal-purchase', async (req: Request, res: Response) => {
-    try {
-      const { orderID } = req.body;
-      const pendingPurchase = req.session.pendingPurchase;
-      
-      if (!pendingPurchase) {
-        return res.status(400).json({ message: 'No pending purchase found' });
-      }
-      
-      const { tier, tokens, price, userId } = pendingPurchase;
-      
-      // Record the successful purchase
-      if (userId) {
-        await db.insert(purchases).values({
-          userId: userId,
-          paypalOrderId: orderID,
-          amount: Math.round(price * 100),
-          tokensAdded: tokens,
-          status: 'completed',
-        });
-        
-        // Get current user credits and add new tokens
-        const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-        if (user.length > 0) {
-          const newCredits = user[0]!.credits + tokens;
-          await db.update(users)
-            .set({ credits: newCredits })
-            .where(eq(users.id, userId));
-        }
-      }
-      
-      // Clear the pending purchase
-      delete req.session.pendingPurchase;
-      
-      res.json({ 
-        success: true, 
-        message: 'Purchase completed successfully',
-        tokensAdded: tokens
-      });
-    } catch (error: any) {
-      console.error('Error completing PayPal purchase:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
   
   // Assignment Attachment Routes
   
