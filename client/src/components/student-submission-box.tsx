@@ -36,9 +36,11 @@ interface StudentSubmissionBoxProps {
   onChange: (value: string) => void;
   onGradeSubmission?: () => void;
   onDetectStudentName?: (name: string) => void;
+  onSendToHumanizer?: () => void;
+  onSendToPerfectGenerator?: () => void;
 }
 
-const StudentSubmissionBox: React.FC<StudentSubmissionBoxProps> = ({ value, onChange, onGradeSubmission, onDetectStudentName }) => {
+const StudentSubmissionBox: React.FC<StudentSubmissionBoxProps> = ({ value, onChange, onGradeSubmission, onDetectStudentName, onSendToHumanizer, onSendToPerfectGenerator }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiProbability, setAiProbability] = useState<number | null>(null);
   const [showMathView, setShowMathView] = useState(false);
@@ -386,6 +388,42 @@ const StudentSubmissionBox: React.FC<StudentSubmissionBoxProps> = ({ value, onCh
               </svg>
               GRADE SUBMISSION
             </Button>
+          </div>
+        )}
+
+        {/* Send buttons - only show when there's content */}
+        {value.trim() && (onSendToHumanizer || onSendToPerfectGenerator) && (
+          <div className="mt-4 border-t pt-4">
+            <div className="flex gap-2 flex-wrap">
+              {onSendToHumanizer && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onSendToHumanizer}
+                  className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                  title="Send to AI Text Rewriter (Humanizer) Box A"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                  To Humanizer
+                </Button>
+              )}
+              {onSendToPerfectGenerator && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onSendToPerfectGenerator}
+                  className="border-green-600 text-green-600 hover:bg-green-50"
+                  title="Send to Perfect Assignment Generator"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                  To Perfect Generator
+                </Button>
+              )}
+            </div>
           </div>
         )}
       </CardContent>

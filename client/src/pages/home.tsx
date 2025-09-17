@@ -784,6 +784,8 @@ export default function Home() {
                   onChange={setStudentText} 
                   onGradeSubmission={handleGradeAssignment}
                   onDetectStudentName={setStudentName}
+                  onSendToHumanizer={() => setAiTextRewriterInput(studentText)}
+                  onSendToPerfectGenerator={() => setPerfectAssignmentText(studentText)}
                 />
               </div>
 
@@ -1024,6 +1026,18 @@ export default function Home() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                               </svg>
                               Verify
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setAiTextRewriterInput(perfectAnswer)}
+                              className="border-orange-600 text-orange-600 hover:bg-orange-50"
+                              title="Send to AI Text Rewriter (Humanizer) Box A"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                              </svg>
+                              To Humanizer
                             </Button>
                             <Button
                               variant="outline"
