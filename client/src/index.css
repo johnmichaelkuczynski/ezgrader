@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Stripe Elements visibility fix */
+.StripeElement, .__PrivateStripeElement > iframe { 
+  min-height: 44px !important; 
+  visibility: visible !important; 
+  opacity: 1 !important; 
+}
+
 /* Styles for the assignment comparison feature */
 .highlight-blue {
   background-color: rgba(59, 130, 246, 0.2);

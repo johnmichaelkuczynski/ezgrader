@@ -6,6 +6,7 @@ import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import PayPalButton from "@/components/PayPalButton";
+import CheckoutForm from "@/components/CheckoutForm";
 
 // Load Stripe properly using loadStripe
 import { loadStripe } from '@stripe/stripe-js';
@@ -267,8 +268,13 @@ export default function Pricing() {
             </Card>
           ))}
         </div>
-        
+
         <div className="mt-12 bg-white rounded-lg p-6 shadow-sm">
+          <h3 className="text-lg font-semibold mb-4">Pay with Card</h3>
+          <CheckoutForm />
+        </div>
+        
+        <div className="mt-8 bg-white rounded-lg p-6 shadow-sm">
           <h3 className="text-lg font-semibold mb-4">Storage Fees</h3>
           <p className="text-gray-600 mb-2">
             • Storage is charged at 500 tokens/month for 50,000 words
