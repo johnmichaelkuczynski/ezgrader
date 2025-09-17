@@ -10,7 +10,7 @@ import PayPalButton from "@/components/PayPalButton";
 // Load Stripe properly using loadStripe
 import { loadStripe } from '@stripe/stripe-js';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY as string);
 
 // Match the backend TOKEN_PRICING system exactly
 const pricingTiers = [
