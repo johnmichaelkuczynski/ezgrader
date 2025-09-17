@@ -6,12 +6,6 @@ import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import PayPalButton from "@/components/PayPalButton";
-import CheckoutForm from "@/components/CheckoutForm";
-
-// Load Stripe properly using loadStripe
-import { loadStripe } from '@stripe/stripe-js';
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY as string);
 
 // Match the backend TOKEN_PRICING system exactly
 const pricingTiers = [
@@ -112,23 +106,11 @@ export default function Pricing() {
         return;
       }
       if (data.id) {
-        const stripe = await stripePromise;
-        if (stripe) {
-          const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
-          if (error) {
-            toast({
-              title: "Checkout Error",
-              description: error.message || "Failed to redirect to checkout",
-              variant: "destructive",
-            });
-          }
-        } else {
-          toast({
-            title: "Payment Service Unavailable",
-            description: "Stripe failed to load. Please try PayPal below or refresh and try again.",
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "Card Payments Unavailable",
+          description: "Please use PayPal payment option below.",
+          variant: "destructive",
+        });
         setLoading(null);
         return;
       }
@@ -269,10 +251,6 @@ export default function Pricing() {
           ))}
         </div>
 
-        <div className="mt-12 bg-white rounded-lg p-6 shadow-sm">
-          <h3 className="text-lg font-semibold mb-4">Pay with Card</h3>
-          <CheckoutForm />
-        </div>
         
         <div className="mt-8 bg-white rounded-lg p-6 shadow-sm">
           <h3 className="text-lg font-semibold mb-4">Storage Fees</h3>
