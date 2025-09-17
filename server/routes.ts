@@ -2965,6 +2965,62 @@ Continue from where it left off and provide a proper ending:`;
   // STRIPE CREDIT PURCHASE ENDPOINTS
   // ================================
   
+  // NEW parallel checkout endpoint — does not touch existing payments
+  app.post('/create-checkout-session-v2', express.json(), async (req: Request, res: Response) => {
+    try {
+      const stripeV2 = new Stripe(process.env.STRIPE_SECRET_KEY_NEW || process.env.STRIPE_SECRET_KEY);
+      const session = await stripeV2.checkout.sessions.create({
+        payment_method_types: ['card'],
+        mode: 'payment',
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: { name: 'EZGrader Credits Pack (10)' },
+            unit_amount: 1000  // $10.00 in cents
+          },
+          quantity: 1
+        }],
+        success_url: `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/success-v2?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/pricing`
+      });
+      return res.json({ url: session.url });
+    } catch (e: any) { 
+      console.error('Stripe V2 checkout error:', e); 
+      return res.status(500).json({ error: e.message }); 
+    }
+  });
+
+  // Success verification route
+  app.get('/success-v2', async (req: Request, res: Response) => {
+    const sessionId = req.query.session_id as string;
+    if (!sessionId) return res.status(400).send('no session');
+    
+    try {
+      const stripeV2 = new Stripe(process.env.STRIPE_SECRET_KEY_NEW || process.env.STRIPE_SECRET_KEY);
+      const session = await stripeV2.checkout.sessions.retrieve(sessionId);
+      
+      if (session && session.payment_status === 'paid') {
+        // Grant 10 credits to the user (simple implementation)
+        console.log('Payment successful for session:', sessionId);
+        return res.send(`
+          <html>
+            <head><title>Payment Successful</title></head>
+            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
+              <h1 style="color: green;">✅ Payment Successful!</h1>
+              <p>Credits have been granted to your account.</p>
+              <p>Session ID: ${sessionId}</p>
+              <a href="/" style="display: inline-block; padding: 10px 20px; background: #007cba; color: white; text-decoration: none; border-radius: 5px;">Return to App</a>
+            </body>
+          </html>
+        `);
+      }
+      res.status(400).send('payment not complete');
+    } catch (error) {
+      console.error('Success verification error:', error);
+      res.status(500).send('verification error');
+    }
+  });
+  
   // Authentication check endpoint
   app.get('/api/whoami', (req: Request, res: Response) => {
     try {

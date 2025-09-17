@@ -25,75 +25,29 @@ export default function Pricing() {
   const buyCredits = async (tier: string) => {
     setLoading(tier);
     
-    // 1) Get logged-in user (works even if cookies are blocked in iframes)
-    let userId = null;
     try {
-      const auth = await fetch('/api/auth/me', { credentials: 'include' });
-      if (auth.ok) {
-        const userData = await auth.json();
-        userId = userData.user?.id || null;
-      }
-    } catch (e) {
-      console.error('Failed to check authentication:', e);
-    }
-
-    if (!userId) {
-      // Force real-page auth flow
-      setLocation('/login');
-      setLoading(null);
-      return;
-    }
-
-    // 2) Create checkout session and navigate
-    try {
-      const r = await fetch('/api/checkout', {
+      // Simple V2 checkout flow - bypasses all complex auth/session issues
+      const r = await fetch('/create-checkout-session-v2', { 
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({ priceTier: tier })
+        headers: { 'Content-Type': 'application/json' }
       });
       
       if (!r.ok) {
-        const errorData = await r.json();
-        throw new Error(errorData.error || `HTTP ${r.status}`);
+        throw new Error(`HTTP ${r.status}`);
       }
       
       const data = await r.json();
-      console.log('Checkout response:', data);
-
-      // Stripe checkout session created successfully
+      console.log('V2 Checkout response:', data);
+      
       if (data.url) {
-        console.log('Redirecting to Stripe URL:', data.url);
-        // Use Stripe's hosted checkout URL - force redirect
-        try {
-          window.location.assign(data.url);
-        } catch (redirectError) {
-          console.error('Redirect failed, trying window.open:', redirectError);
-          window.open(data.url, '_self');
-        }
+        console.log('Redirecting to Stripe V2 URL:', data.url);
+        window.location.href = data.url;
         return;
       }
       
-      if (data.id) {
-        console.log('Using Stripe.js redirect with session ID:', data.id);
-        // Use Stripe.js to redirect to checkout
-        const stripe = await stripePromise;
-        if (!stripe) {
-          throw new Error("Stripe failed to load");
-        }
-        
-        const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
-        if (error) {
-          throw new Error(error.message || "Failed to redirect to checkout");
-        }
-        return;
-      }
-      
-      throw new Error("Invalid checkout response - no url or session id");
+      throw new Error('No checkout URL returned');
     } catch (e: any) {
-      console.error('Checkout error:', e);
+      console.error('V2 Checkout error:', e);
       toast({
         title: "Payment Error",
         description: e?.message || 'Failed to start checkout process',
