@@ -2,30 +2,14 @@ import React, { useState } from "react";
 import { CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Button } from "@/components/ui/button";
 
-const CARD_ELEMENT_OPTIONS = {
-  style: {
-    base: {
-      color: "#424770",
-      fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
-      fontSmoothing: "antialiased",
-      fontSize: "16px",
-      "::placeholder": {
-        color: "#aab7c4"
-      }
-    },
-    invalid: {
-      color: "#9e2146",
-      iconColor: "#fa755a"
-    }
-  },
-  hidePostalCode: true
-};
-
 export default function CheckoutForm() {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+
+  // Debug information
+  console.log("CheckoutForm rendered, stripe:", !!stripe, "elements:", !!elements);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -58,15 +42,40 @@ export default function CheckoutForm() {
     }
   }
 
+  if (!stripe || !elements) {
+    return (
+      <div className="w-full max-w-md mx-auto p-4 border border-gray-200 rounded-lg bg-gray-50">
+        <p className="text-sm text-gray-600">Loading payment form...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full max-w-md mx-auto">
+    <div className="w-full max-w-md mx-auto p-4 border border-gray-200 rounded-lg bg-white">
+      <div className="mb-4">
+        <p className="text-sm text-green-600">✅ Stripe Elements Loaded Successfully</p>
+      </div>
+      
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">
             Card Information
           </label>
-          <div className="p-3 border border-gray-300 rounded-md bg-white focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
-            <CardElement options={CARD_ELEMENT_OPTIONS} />
+          <div className="p-3 border border-gray-300 rounded-md bg-white">
+            <CardElement 
+              options={{
+                style: {
+                  base: {
+                    fontSize: '16px',
+                    color: '#424770',
+                    '::placeholder': {
+                      color: '#aab7c4',
+                    },
+                  },
+                },
+                hidePostalCode: true,
+              }}
+            />
           </div>
         </div>
 
@@ -78,8 +87,8 @@ export default function CheckoutForm() {
 
         <Button
           type="submit"
-          disabled={!stripe || loading}
-          className="w-full"
+          disabled={loading}
+          className="w-full bg-blue-600 hover:bg-blue-700"
           data-testid="button-stripe-pay"
         >
           {loading ? (
@@ -88,7 +97,7 @@ export default function CheckoutForm() {
               Processing...
             </div>
           ) : (
-            "Pay with Stripe"
+            "Pay $5 with Stripe"
           )}
         </Button>
       </form>
