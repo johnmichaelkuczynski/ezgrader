@@ -2513,8 +2513,11 @@ Continue from where it left off and provide a proper ending:`;
     try {
       console.log('GET /api/assignments request received');
       
-      // Default to user ID 1 for now (we can add auth later)
-      const userId = 1;
+      // Use session userId for proper user isolation
+      const userId = req.session?.userId;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
       console.log(`Fetching assignments for user ID: ${userId}`);
       
       const assignments = await storage.getAssignmentsByUserId(userId);
@@ -2536,10 +2539,20 @@ Continue from where it left off and provide a proper ending:`;
         return res.status(400).json({ message: 'Invalid assignment ID' });
       }
       
+      const userId = req.session?.userId;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+      
       const assignment = await storage.getAssignment(id);
       
       if (!assignment) {
         return res.status(404).json({ message: 'Assignment not found' });
+      }
+      
+      // Check ownership
+      if (assignment.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied - not your assignment' });
       }
       
       res.json(assignment);
@@ -2556,10 +2569,15 @@ Continue from where it left off and provide a proper ending:`;
     try {
       console.log('Received assignment creation request:', JSON.stringify(req.body, null, 2));
       
-      // Ensure userId is set - default to 1 for development if not provided
+      // Use session userId for proper user isolation
+      const sessionUserId = req.session?.userId;
+      if (!sessionUserId) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+      
       const reqWithUserId = {
         ...req.body,
-        userId: req.body.userId || 1
+        userId: sessionUserId  // Always use session userId, ignore client-provided userId
       };
       
       console.log('Request with userId:', JSON.stringify(reqWithUserId, null, 2));
@@ -2594,6 +2612,21 @@ Continue from where it left off and provide a proper ending:`;
       
       if (isNaN(assignmentId)) {
         return res.status(400).json({ message: 'Invalid assignment ID' });
+      }
+      
+      const userId = req.session?.userId;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+      
+      // Check ownership before updating
+      const existingAssignment = await storage.getAssignment(assignmentId);
+      if (!existingAssignment) {
+        return res.status(404).json({ message: 'Assignment not found' });
+      }
+      
+      if (existingAssignment.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied - not your assignment' });
       }
       
       const result = insertAssignmentSchema.partial().safeParse(req.body);
@@ -2656,6 +2689,21 @@ Continue from where it left off and provide a proper ending:`;
       
       if (isNaN(assignmentId)) {
         return res.status(400).json({ message: 'Invalid assignment ID' });
+      }
+      
+      const userId = req.session?.userId;
+      if (!userId) {
+        return res.status(401).json({ message: 'Not authenticated' });
+      }
+      
+      // Check ownership before deleting
+      const existingAssignment = await storage.getAssignment(assignmentId);
+      if (!existingAssignment) {
+        return res.status(404).json({ message: 'Assignment not found' });
+      }
+      
+      if (existingAssignment.userId !== userId) {
+        return res.status(403).json({ message: 'Access denied - not your assignment' });
       }
       
       // Delete the assignment
