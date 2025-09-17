@@ -25,32 +25,72 @@ export default function Pricing() {
   const buyCredits = async (tier: string) => {
     setLoading(tier);
     
+    // 1) Get logged-in user id (works even if cookies are blocked in iframes)
+    let userId = null;
     try {
-      // Simple V2 checkout flow - bypasses all complex auth/session issues
-      const r = await fetch('/create-checkout-session-v2', { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      
-      if (!r.ok) {
-        throw new Error(`HTTP ${r.status}`);
+      const who = await fetch('/api/whoami', { credentials: 'include' });
+      if (who.ok) {
+        const j = await who.json();
+        userId = j.userId || null;
       }
-      
+    } catch (e) {
+      console.error('Failed to check authentication:', e);
+    }
+
+    if (!userId) {
+      // Force real-page auth flow
+      setLocation('/login');
+      setLoading(null);
+      return;
+    }
+
+    // 2) Create checkout session and navigate
+    try {
+      const r = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user-id': String(userId)
+        },
+        body: JSON.stringify({ priceTier: tier })
+      });
       const data = await r.json();
-      console.log('V2 Checkout response:', data);
-      
+
       if (data.url) {
-        console.log('Redirecting to Stripe V2 URL:', data.url);
-        window.location.href = data.url;
+        window.location.assign(data.url);
         return;
       }
-      
-      throw new Error('No checkout URL returned');
-    } catch (e: any) {
-      console.error('V2 Checkout error:', e);
+      if (data.id) {
+        const stripe = await stripePromise;
+        if (stripe) {
+          const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
+          if (error) {
+            toast({
+              title: "Error",
+              description: error.message || "Failed to redirect to checkout",
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Error",
+            description: "Stripe failed to load. Please refresh and try again.",
+            variant: "destructive",
+          });
+        }
+        setLoading(null);
+        return;
+      }
       toast({
-        title: "Payment Error",
-        description: e?.message || 'Failed to start checkout process',
+        title: "Error",
+        description: "Checkout init failed",
+        variant: "destructive",
+      });
+      setLoading(null);
+    } catch (e: any) {
+      toast({
+        title: "Error",
+        description: e && e.message ? e.message : 'Checkout error',
         variant: "destructive",
       });
       setLoading(null);

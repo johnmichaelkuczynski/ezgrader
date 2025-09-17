@@ -1,14 +1,13 @@
 import type { Express, Request, Response, NextFunction } from "express";
-import express from "express";
 import { createServer, type Server } from "http";
 import bcrypt from 'bcryptjs';
 import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage, insertRewriteSessionSchema, rewriteRequestSchema, gptZeroAnalysisSchema } from "@shared/schema";
+import { detectAIContent } from "./services/gptzero";
 import { generateOpenAIResponse } from "./services/openai";
 import { generateAnthropicResponse } from "./services/anthropic";
 import { generatePerplexityResponse } from "./services/perplexity";
 import { gptZeroService } from "./services/gptZero";
-import { detectAIContent } from "./services/gptzero";
 import { aiProviderService } from "./services/aiProviders";
 import { textChunkerService } from "./services/textChunker";
 import { documentGeneratorService } from "./services/documentGenerator";
@@ -22,15 +21,7 @@ import * as path from "path";
 import mammoth from "mammoth";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
-import Stripe from "stripe";
-
-// Initialize Stripe
-const STRIPE_SECRET = (process.env.STRIPE_SECRET_KEY_NEW || '').trim() || (process.env.STRIPE_SECRET_KEY || '').trim();
-if (!STRIPE_SECRET) {
-  throw new Error('Missing required Stripe secret (STRIPE_SECRET_KEY_NEW or STRIPE_SECRET_KEY)');
-}
-const stripe = new Stripe(STRIPE_SECRET);
-console.log('Stripe key source:', process.env.STRIPE_SECRET_KEY_NEW ? 'NEW' : 'OLD');
+import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
 
 // Extend session type
 declare module 'express-session' {
@@ -46,11 +37,12 @@ declare module 'express-session' {
   }
 }
 
-// Token pricing tiers (updated to match frontend pricing)
+// Token pricing tiers (PayPal uses dollars, not cents)
 const TOKEN_PRICING = {
-  "10": { price: 10.00, tokens: 10 },
-  "50": { price: 50.00, tokens: 50 },
-  "100": { price: 100.00, tokens: 100 },
+  "5": { price: 5.00, tokens: 5000 },
+  "10": { price: 10.00, tokens: 20000 },
+  "100": { price: 100.00, tokens: 500000 },
+  "1000": { price: 1000.00, tokens: 10000000 },
 };
 
 // Token costs for different actions
@@ -78,9 +70,7 @@ async function deductCredits(userId: number, tokensUsed: number, action: string,
     const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (user.length === 0) return false;
     
-    if (!user[0] || user[0].credits == null) return false;
-    const currentCredits = user[0].credits!;
-    const newCredits = currentCredits - tokensUsed;
+    const newCredits = user[0]!.credits - tokensUsed;
     
     // Deduct from user credits
     await db.update(users)
@@ -89,7 +79,7 @@ async function deductCredits(userId: number, tokensUsed: number, action: string,
     
     // Log usage
     await db.insert(tokenUsage).values({
-      userId: userId,
+      userId,
       action,
       tokensUsed,
       description,
@@ -484,6 +474,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // PayPal payment routes
+  app.get("/paypal/setup", async (req, res) => {
+    await loadPaypalDefault(req, res);
+  });
+
+  app.post("/paypal/order", async (req, res) => {
+    await createPaypalOrder(req, res);
+  });
+
+  app.post("/paypal/order/:orderID/capture", async (req, res) => {
+    await capturePaypalOrder(req, res);
+  });
+
+  // PayPal purchase initiation route
+  app.post('/api/create-paypal-order', async (req: Request, res: Response) => {
+    try {
+      const { tier } = purchaseSchema.parse(req.body);
+      const pricing = TOKEN_PRICING[tier];
+      
+      if (!pricing) {
+        return res.status(400).json({ error: 'Invalid tier' });
+      }
+      
+      // Store the purchase intent in session for completion later
+      req.session.pendingPurchase = {
+        tier,
+        tokens: pricing.tokens,
+        price: pricing.price,
+        userId: req.session?.userId
+      };
+      
+      res.json({ 
+        amount: pricing.price.toString(),
+        currency: 'USD',
+        intent: 'CAPTURE',
+        tokens: pricing.tokens,
+        tier
+      });
+    } catch (error: any) {
+      console.error('Error creating PayPal order:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // PayPal purchase completion route
+  app.post('/api/complete-paypal-purchase', async (req: Request, res: Response) => {
+    try {
+      const { orderID } = req.body;
+      const pendingPurchase = req.session.pendingPurchase;
+      
+      if (!pendingPurchase) {
+        return res.status(400).json({ message: 'No pending purchase found' });
+      }
+      
+      const { tier, tokens, price, userId } = pendingPurchase;
+      
+      // Record the successful purchase
+      if (userId) {
+        await db.insert(purchases).values({
+          userId: userId,
+          paypalOrderId: orderID,
+          amount: Math.round(price * 100),
+          tokensAdded: tokens,
+          status: 'completed',
+        });
+        
+        // Get current user credits and add new tokens
+        const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        if (user.length > 0) {
+          const newCredits = user[0]!.credits + tokens;
+          await db.update(users)
+            .set({ credits: newCredits })
+            .where(eq(users.id, userId));
+        }
+      }
+      
+      // Clear the pending purchase
+      delete req.session.pendingPurchase;
+      
+      res.json({ 
+        success: true, 
+        message: 'Purchase completed successfully',
+        tokensAdded: tokens
+      });
+    } catch (error: any) {
+      console.error('Error completing PayPal purchase:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
   
   // Assignment Attachment Routes
   
@@ -2434,8 +2513,8 @@ Continue from where it left off and provide a proper ending:`;
     try {
       console.log('GET /api/assignments request received');
       
-      // Use actual user ID from session
-      const userId = req.session?.userId || 1;
+      // Default to user ID 1 for now (we can add auth later)
+      const userId = 1;
       console.log(`Fetching assignments for user ID: ${userId}`);
       
       const assignments = await storage.getAssignmentsByUserId(userId);
@@ -2960,181 +3039,6 @@ Continue from where it left off and provide a proper ending:`;
     } catch (error: any) {
       console.error('Download error:', error);
       res.status(500).json({ message: `Failed to generate ${req.params.format?.toUpperCase()} file: ${error.message}` });
-    }
-  });
-
-  // ================================
-  // STRIPE CREDIT PURCHASE ENDPOINTS
-  // ================================
-  
-  // NEW parallel checkout endpoint — does not touch existing payments
-  app.post('/create-checkout-session-v2', express.json(), async (req: Request, res: Response) => {
-    try {
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        mode: 'payment',
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: { name: 'EZGrader Credits Pack (10)' },
-            unit_amount: 1000  // $10.00 in cents
-          },
-          quantity: 1
-        }],
-        success_url: `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/success-v2?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.APP_URL || `${req.protocol}://${req.get('host')}`}/pricing`
-      });
-      return res.json({ url: session.url });
-    } catch (e: any) { 
-      console.error('Stripe V2 checkout error:', e); 
-      return res.status(500).json({ error: e.message }); 
-    }
-  });
-
-  // Success verification route
-  app.get('/success-v2', async (req: Request, res: Response) => {
-    const sessionId = req.query.session_id as string;
-    if (!sessionId) return res.status(400).send('no session');
-    
-    try {
-      const session = await stripe.checkout.sessions.retrieve(sessionId);
-      
-      if (session && session.payment_status === 'paid') {
-        // Grant 10 credits to the user (simple implementation)
-        console.log('Payment successful for session:', sessionId);
-        return res.send(`
-          <html>
-            <head><title>Payment Successful</title></head>
-            <body style="font-family: Arial, sans-serif; text-align: center; padding: 50px;">
-              <h1 style="color: green;">✅ Payment Successful!</h1>
-              <p>Credits have been granted to your account.</p>
-              <p>Session ID: ${sessionId}</p>
-              <a href="/" style="display: inline-block; padding: 10px 20px; background: #007cba; color: white; text-decoration: none; border-radius: 5px;">Return to App</a>
-            </body>
-          </html>
-        `);
-      }
-      res.status(400).send('payment not complete');
-    } catch (error) {
-      console.error('Success verification error:', error);
-      res.status(500).send('verification error');
-    }
-  });
-  
-  // Authentication check endpoint
-  app.get('/api/whoami', (req: Request, res: Response) => {
-    try {
-      const userId = req.session?.userId || null;
-      const username = req.session?.username || null;
-      res.json({ userId, username });
-    } catch (error) {
-      console.error('Error checking authentication:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-
-  // Stripe checkout session creation
-  app.post('/api/checkout', async (req: Request, res: Response) => {
-    try {
-      const { priceTier } = req.body;
-      const userId = req.session?.userId; // Only use session, ignore client headers
-      
-      if (!userId) {
-        return res.status(401).json({ error: 'not_authenticated' });
-      }
-
-      const pricing = TOKEN_PRICING[priceTier as keyof typeof TOKEN_PRICING];
-      if (!pricing) {
-        return res.status(400).json({ error: 'Invalid price tier' });
-      }
-
-      // Create Stripe checkout session
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `${pricing.tokens} Credits`,
-              description: `Purchase ${pricing.tokens} credits for EZ Grader`,
-            },
-            unit_amount: Math.round(pricing.price * 100), // Convert to cents
-          },
-          quantity: 1,
-        }],
-        mode: 'payment',
-        success_url: `${req.protocol}://${req.get('host')}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${req.protocol}://${req.get('host')}/pricing`,
-        metadata: {
-          userId: userId.toString(),
-          credits: pricing.tokens.toString(),
-          tier: priceTier,
-        },
-      });
-
-      res.json({ id: session.id, url: session.url });
-    } catch (error: any) {
-      console.error('Stripe checkout error:', error);
-      res.status(500).json({ error: error.message || 'Checkout failed' });
-    }
-  });
-
-  // Stripe webhook handler
-  app.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'] as string;
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_EZGRADER || process.env.STRIPE_WEBHOOK_SECRET;
-    
-    if (!webhookSecret) {
-      console.error('Stripe webhook secret not configured');
-      return res.status(500).json({ error: 'Webhook secret not configured' });
-    }
-    
-    try {
-      const event = stripe.webhooks.constructEvent(
-        req.body,
-        sig,
-        webhookSecret
-      );
-
-      console.log('Stripe webhook event received:', event.type);
-
-      if (event.type === 'checkout.session.completed') {
-        const session = event.data.object as Stripe.Checkout.Session;
-        const { userId, credits, tier } = session.metadata || {};
-
-        if (userId && credits) {
-          const userIdNum = parseInt(userId);
-          const creditsNum = parseInt(credits);
-
-          // Get current user credits
-          const user = await db.select().from(users).where(eq(users.id, userIdNum)).limit(1);
-          if (user.length > 0) {
-            const currentCredits = user[0]?.credits ?? 0;
-            const newCredits = currentCredits + creditsNum;
-            
-            // Update user credits
-            await db.update(users)
-              .set({ credits: newCredits })
-              .where(eq(users.id, userIdNum));
-
-            // Record the purchase
-            await db.insert(purchases).values({
-              userId: userIdNum,
-              stripePaymentIntentId: session.payment_intent as string,
-              amount: Math.round((session.amount_total || 0)),
-              tokensAdded: creditsNum,
-              status: 'completed',
-            });
-
-            console.log(`Credits updated for user ${userId}: +${creditsNum} credits (total: ${newCredits})`);
-          }
-        }
-      }
-
-      res.json({ received: true });
-    } catch (error: any) {
-      console.error('Webhook error:', error);
-      res.status(400).send(`Webhook Error: ${error.message}`);
     }
   });
 
