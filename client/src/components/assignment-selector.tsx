@@ -191,7 +191,6 @@ export default function AssignmentSelector({
       
       // Create the payload with default grading instructions if empty
       const payload = {
-        ...(isUpdating ? {} : { userId: 1 }), // Only include userId for new assignments
         title: newTitle,
         prompt: assignmentText,
         gradingInstructions: gradingText.trim() || "Follow the assignment prompt closely and provide thoughtful analysis with clear reasoning.",
