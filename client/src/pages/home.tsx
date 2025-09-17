@@ -592,7 +592,17 @@ export default function Home() {
   // Fetch assignments
   const { data: assignments = [] } = useQuery({
     queryKey: ['/api/assignments'],
-    queryFn: () => fetch('/api/assignments').then(res => res.json()),
+    queryFn: async () => {
+      const res = await fetch('/api/assignments');
+      if (res.status === 401) {
+        // User not authenticated, return empty array
+        return [];
+      }
+      if (!res.ok) {
+        throw new Error('Failed to fetch assignments');
+      }
+      return res.json();
+    },
   });
 
   // Listen for assignment saves to refresh the list
