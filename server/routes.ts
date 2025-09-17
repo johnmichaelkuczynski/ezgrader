@@ -2434,8 +2434,8 @@ Continue from where it left off and provide a proper ending:`;
     try {
       console.log('GET /api/assignments request received');
       
-      // Default to user ID 1 for now (we can add auth later)
-      const userId = 1;
+      // Use actual user ID from session
+      const userId = req.session?.userId || 1;
       console.log(`Fetching assignments for user ID: ${userId}`);
       
       const assignments = await storage.getAssignmentsByUserId(userId);
