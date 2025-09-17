@@ -9,6 +9,9 @@ import { apiRequest } from "@/lib/queryClient";
 // Load Stripe properly using loadStripe
 import { loadStripe } from '@stripe/stripe-js';
 
+console.log('VITE_STRIPE_PUBLIC_KEY:', import.meta.env.VITE_STRIPE_PUBLIC_KEY);
+console.log('VITE_STRIPE_PUBLISHABLE_KEY:', import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
+
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 const pricingTiers = [
