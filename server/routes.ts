@@ -25,10 +25,12 @@ import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 
 // Initialize Stripe
-if (!process.env.STRIPE_SECRET_KEY) {
-  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+const STRIPE_SECRET = (process.env.STRIPE_SECRET_KEY_NEW || '').trim() || (process.env.STRIPE_SECRET_KEY || '').trim();
+if (!STRIPE_SECRET) {
+  throw new Error('Missing required Stripe secret (STRIPE_SECRET_KEY_NEW or STRIPE_SECRET_KEY)');
 }
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const stripe = new Stripe(STRIPE_SECRET);
+console.log('Stripe key source:', process.env.STRIPE_SECRET_KEY_NEW ? 'NEW' : 'OLD');
 
 // Extend session type
 declare module 'express-session' {
@@ -2968,8 +2970,7 @@ Continue from where it left off and provide a proper ending:`;
   // NEW parallel checkout endpoint — does not touch existing payments
   app.post('/create-checkout-session-v2', express.json(), async (req: Request, res: Response) => {
     try {
-      const stripeV2 = new Stripe(process.env.STRIPE_SECRET_KEY_NEW || process.env.STRIPE_SECRET_KEY);
-      const session = await stripeV2.checkout.sessions.create({
+      const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],
         mode: 'payment',
         line_items: [{
@@ -2996,8 +2997,7 @@ Continue from where it left off and provide a proper ending:`;
     if (!sessionId) return res.status(400).send('no session');
     
     try {
-      const stripeV2 = new Stripe(process.env.STRIPE_SECRET_KEY_NEW || process.env.STRIPE_SECRET_KEY);
-      const session = await stripeV2.checkout.sessions.retrieve(sessionId);
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
       
       if (session && session.payment_status === 'paid') {
         // Grant 10 credits to the user (simple implementation)
