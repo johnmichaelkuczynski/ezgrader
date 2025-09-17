@@ -1,13 +1,14 @@
-import type { Express, Request, Response, NextFunction } from "express";\nimport express from "express";
+import type { Express, Request, Response, NextFunction } from "express";
+import express from "express";
 import { createServer, type Server } from "http";
 import bcrypt from 'bcryptjs';
 import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage, insertRewriteSessionSchema, rewriteRequestSchema, gptZeroAnalysisSchema } from "@shared/schema";
-import { detectAIContent } from "./services/gptzero";
 import { generateOpenAIResponse } from "./services/openai";
 import { generateAnthropicResponse } from "./services/anthropic";
 import { generatePerplexityResponse } from "./services/perplexity";
 import { gptZeroService } from "./services/gptZero";
+import { detectAIContent } from "./services/gptzero";
 import { aiProviderService } from "./services/aiProviders";
 import { textChunkerService } from "./services/textChunker";
 import { documentGeneratorService } from "./services/documentGenerator";
@@ -27,9 +28,7 @@ import Stripe from "stripe";
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
 }
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2024-06-20",
-});
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Extend session type
 declare module 'express-session' {
@@ -77,7 +76,9 @@ async function deductCredits(userId: number, tokensUsed: number, action: string,
     const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (user.length === 0) return false;
     
-    const newCredits = user[0]!.credits - tokensUsed;
+    if (!user[0] || user[0].credits == null) return false;
+    const currentCredits = user[0].credits;
+    const newCredits = currentCredits - tokensUsed;
     
     // Deduct from user credits
     await db.update(users)
@@ -86,7 +87,7 @@ async function deductCredits(userId: number, tokensUsed: number, action: string,
     
     // Log usage
     await db.insert(tokenUsage).values({
-      userId,
+      userId: userId,
       action,
       tokensUsed,
       description,
@@ -2980,13 +2981,13 @@ Continue from where it left off and provide a proper ending:`;
   app.post('/api/checkout', async (req: Request, res: Response) => {
     try {
       const { priceTier } = req.body;
-      const userId = req.session?.userId || req.headers['x-user-id'];
+      const userId = req.session?.userId; // Only use session, ignore client headers
       
       if (!userId) {
         return res.status(401).json({ error: 'not_authenticated' });
       }
 
-      const pricing = TOKEN_PRICING[priceTier];
+      const pricing = TOKEN_PRICING[priceTier as keyof typeof TOKEN_PRICING];
       if (!pricing) {
         return res.status(400).json({ error: 'Invalid price tier' });
       }
@@ -3025,12 +3026,18 @@ Continue from where it left off and provide a proper ending:`;
   // Stripe webhook handler
   app.post('/webhook', express.raw({ type: 'application/json', limit: '1mb' }), async (req: Request, res: Response) => {
     const sig = req.headers['stripe-signature'] as string;
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_EZGRADER || process.env.STRIPE_WEBHOOK_SECRET;
+    
+    if (!webhookSecret) {
+      console.error('Stripe webhook secret not configured');
+      return res.status(500).json({ error: 'Webhook secret not configured' });
+    }
     
     try {
       const event = stripe.webhooks.constructEvent(
         req.body,
         sig,
-        process.env.STRIPE_WEBHOOK_SECRET_EZGRADER || process.env.STRIPE_WEBHOOK_SECRET || ''
+        webhookSecret
       );
 
       console.log('Stripe webhook event received:', event.type);
@@ -3046,7 +3053,8 @@ Continue from where it left off and provide a proper ending:`;
           // Get current user credits
           const user = await db.select().from(users).where(eq(users.id, userIdNum)).limit(1);
           if (user.length > 0) {
-            const newCredits = user[0]!.credits + creditsNum;
+            const currentCredits = user[0]?.credits ?? 0;
+            const newCredits = currentCredits + creditsNum;
             
             // Update user credits
             await db.update(users)
