@@ -25,13 +25,13 @@ export default function Pricing() {
   const buyCredits = async (tier: string) => {
     setLoading(tier);
     
-    // 1) Get logged-in user id (works even if cookies are blocked in iframes)
+    // 1) Get logged-in user (works even if cookies are blocked in iframes)
     let userId = null;
     try {
-      const who = await fetch('/api/whoami', { credentials: 'include' });
-      if (who.ok) {
-        const j = await who.json();
-        userId = j.userId || null;
+      const auth = await fetch('/api/auth/me', { credentials: 'include' });
+      if (auth.ok) {
+        const userData = await auth.json();
+        userId = userData.user?.id || null;
       }
     } catch (e) {
       console.error('Failed to check authentication:', e);
