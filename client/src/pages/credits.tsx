@@ -109,7 +109,7 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
           return_url: `${window.location.origin}/credits?success=true`,
           payment_method_data: {
             billing_details: {
-              email: 'user@placeholder.com' // Placeholder email for logged-in users
+              email: 'user@placeholder.com'
             }
           }
         },
@@ -178,12 +178,8 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
             <PaymentElement 
               options={{
                 fields: {
-                  billingDetails: {
-                    email: 'never' // Never require email - user is already logged in
-                  }
-                },
-                paymentMethodSave: 'disabled', // Let Stripe handle saving based on setup_future_usage
-                paymentMethodRemove: 'disabled'
+                  billingDetails: 'never'
+                }
               }}
             />
             <Button 
