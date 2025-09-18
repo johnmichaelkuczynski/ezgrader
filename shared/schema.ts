@@ -6,7 +6,8 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+  email: text("email").notNull().unique(),
+  password: text("password"), // Nullable for special accounts like jmkuczynski@yahoo.com
   credits: integer("credits").default(0),
   stripeCustomerId: text("stripe_customer_id"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -198,6 +199,7 @@ export const assignmentAttachmentsRelations = relations(assignmentAttachments, (
 // Insert Schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
+  email: true,
   password: true,
 });
 
@@ -287,13 +289,14 @@ export const insertInstructionPresetSchema = createInsertSchema(instructionPrese
 
 // Authentication schemas
 export const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().email("Valid email is required"),
+  password: z.string().optional(), // Optional for special accounts like jmkuczynski@yahoo.com
 });
 
 export const registerSchema = z.object({
+  email: z.string().email("Valid email is required"),
   username: z.string().min(3, "Username must be at least 3 characters").max(50, "Username must be less than 50 characters"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters").optional(), // Optional for special accounts
 });
 
 export const purchaseSchema = z.object({

@@ -18,6 +18,7 @@ export interface IStorage {
   // User methods
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   
   // Assignment methods
@@ -97,6 +98,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return result[0];
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
     return result[0];
   }
 
@@ -386,11 +392,16 @@ export class MemStorage implements IStorage {
     return this.users.find(u => u.username === username);
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return this.users.find(u => u.email === email);
+  }
+
   async createUser(user: InsertUser): Promise<User> {
     const newUser: User = { 
       id: this.nextId++, 
       username: user.username,
-      password: user.password,
+      email: user.email!,
+      password: user.password || null,
       credits: 0,
       stripeCustomerId: null,
       createdAt: new Date()
