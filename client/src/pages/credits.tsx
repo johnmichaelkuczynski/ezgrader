@@ -71,32 +71,38 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
     e.preventDefault();
     setIsProcessing(true);
 
+    // Check if we're in development mode (HTTP) - handle this first
+    const isHTTP = window.location.protocol === 'http:';
+    
+    if (isHTTP) {
+      // For development over HTTP, show a mock success message and redirect
+      toast({
+        title: "Development Mode Demo",
+        description: "Payment simulation successful! In production, this processes real payments over HTTPS.",
+        variant: "default",
+      });
+      
+      // Redirect to success page for demo purposes
+      setTimeout(() => {
+        window.location.href = '/credits?success=true';
+      }, 1500);
+      
+      setIsProcessing(false);
+      return;
+    }
+
+    // Only run Stripe logic if we're in production (HTTPS)
     if (!stripe || !elements) {
+      toast({
+        title: "Payment System Loading",
+        description: "Please wait for the payment system to initialize and try again.",
+        variant: "destructive",
+      });
       setIsProcessing(false);
       return;
     }
 
     try {
-      // Check if we're in development mode (HTTP)
-      const isHTTP = window.location.protocol === 'http:';
-      
-      if (isHTTP) {
-        // For development over HTTP, show a mock success message
-        toast({
-          title: "Development Mode",
-          description: "This is a development environment. In production, this would process the payment securely over HTTPS.",
-          variant: "default",
-        });
-        
-        // Redirect to success page for demo purposes
-        setTimeout(() => {
-          window.location.href = '/credits?success=true';
-        }, 2000);
-        
-        setIsProcessing(false);
-        return;
-      }
-
       const { error } = await stripe.confirmPayment({
         elements,
         confirmParams: {
@@ -105,20 +111,11 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
       });
 
       if (error) {
-        // Handle the "insecure operation" error specifically
-        if (error.message && error.message.includes('insecure')) {
-          toast({
-            title: "Development Environment",
-            description: "Stripe requires HTTPS for secure payments. This works in production with HTTPS.",
-            variant: "default",
-          });
-        } else {
-          toast({
-            title: "Payment Failed",
-            description: error.message,
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "Payment Failed",
+          description: error.message || "An error occurred during payment processing.",
+          variant: "destructive",
+        });
       } else {
         toast({
           title: "Payment Successful",
@@ -127,19 +124,11 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
       }
     } catch (error: any) {
       console.error('Payment error:', error);
-      if (error.message && error.message.includes('insecure')) {
-        toast({
-          title: "Development Environment",
-          description: "Stripe requires HTTPS for secure payments. This works in production with HTTPS.",
-          variant: "default",
-        });
-      } else {
-        toast({
-          title: "Payment Error",
-          description: "An unexpected error occurred. Please try again.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Payment Error", 
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive",
+      });
     }
     
     setIsProcessing(false);
