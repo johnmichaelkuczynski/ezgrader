@@ -42,18 +42,31 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCheckout = async () => {
     setIsProcessing(true);
 
-    // Placeholder for payment processing logic
-    toast({
-      title: "Payment Processing",
-      description: "Payment integration will be implemented here",
-      variant: "default",
-    });
-    
-    setIsProcessing(false);
+    try {
+      const response = await apiRequest('/api/create-checkout-session', {
+        method: 'POST',
+        body: JSON.stringify({ packageId: selectedPackage.id }),
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.url) {
+        // Redirect to Stripe checkout
+        window.location.href = response.url;
+      } else {
+        throw new Error('No checkout URL received');
+      }
+    } catch (error: any) {
+      console.error('Checkout error:', error);
+      toast({
+        title: "Checkout Error",
+        description: error.message || "Failed to create checkout session",
+        variant: "destructive",
+      });
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -68,21 +81,39 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
         </div>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Placeholder space for minimal card input form */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-            <p className="text-sm text-gray-600 text-center">
-              Card payment form will be implemented here
-            </p>
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="text-center">
+              <CreditCard className="h-8 w-8 mx-auto text-blue-600 mb-2" />
+              <p className="text-sm text-blue-800 font-medium">
+                Secure Payment with Stripe
+              </p>
+              <p className="text-xs text-blue-600 mt-1">
+                Your payment information is encrypted and secure
+              </p>
+            </div>
           </div>
+          
+          <div className="border-t pt-4">
+            <div className="flex justify-between text-sm mb-2">
+              <span>Credits:</span>
+              <span className="font-medium">{selectedPackage.credits.toLocaleString()}</span>
+            </div>
+            <div className="flex justify-between text-sm mb-4">
+              <span>Total:</span>
+              <span className="font-medium">${selectedPackage.price}</span>
+            </div>
+          </div>
+          
           <Button 
-            type="submit" 
+            onClick={handleCheckout}
             className="w-full"
             disabled={isProcessing}
+            data-testid="button-checkout"
           >
-            {isProcessing ? 'Processing...' : `Pay $${selectedPackage.price}`}
+            {isProcessing ? 'Redirecting to Stripe...' : `Pay $${selectedPackage.price}`}
           </Button>
-        </form>
+        </div>
       </CardContent>
     </Card>
   );
@@ -112,12 +143,6 @@ export default function Credits() {
 
   const handlePackageSelect = async (pkg: typeof CREDIT_PACKAGES[0]) => {
     setSelectedPackage(pkg);
-    setIsLoading(true);
-
-    // Placeholder - payment intent creation will be implemented here
-    setTimeout(() => {
-      setIsLoading(false);
-    }, 1000);
   };
 
   // Show checkout form if package is selected

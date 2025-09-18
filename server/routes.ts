@@ -575,7 +575,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stripe integration moved to server/webhook.ts for clean Live mode implementation
+  // Stripe checkout session creation
+  app.post('/api/create-checkout-session', async (req: Request, res: Response) => {
+    try {
+      const { packageId } = req.body;
+      
+      if (!process.env.STRIPE_SECRET_KEY) {
+        return res.status(500).json({ error: 'Stripe not configured' });
+      }
+
+      const stripe = await import('stripe').then(m => new m.default(process.env.STRIPE_SECRET_KEY!, { 
+        apiVersion: "2024-06-20" 
+      }));
+
+      // Package mapping
+      const packages = {
+        'small': { credits: 1000, price: 999, name: 'Starter Pack' },
+        'medium': { credits: 5000, price: 3999, name: 'Pro Pack' },
+        'large': { credits: 15000, price: 9999, name: 'Enterprise Pack' }
+      };
+
+      const selectedPackage = packages[packageId as keyof typeof packages];
+      if (!selectedPackage) {
+        return res.status(400).json({ error: 'Invalid package' });
+      }
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price_data: {
+              currency: 'usd',
+              product_data: {
+                name: selectedPackage.name,
+                description: `${selectedPackage.credits} credits for Grading Pro`,
+              },
+              unit_amount: selectedPackage.price,
+            },
+            quantity: 1,
+          },
+        ],
+        mode: 'payment',
+        success_url: `${req.protocol}://${req.get('host')}/credits?success=true`,
+        cancel_url: `${req.protocol}://${req.get('host')}/credits`,
+        metadata: {
+          userId: req.session?.userId?.toString() || 'anonymous',
+          credits: selectedPackage.credits.toString(),
+          packageId: packageId
+        },
+      });
+
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error('Error creating checkout session:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
   
   // Assignment Attachment Routes
   

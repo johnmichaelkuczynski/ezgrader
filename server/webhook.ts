@@ -32,7 +32,42 @@ router.post("/", express.raw({ type: "application/json" }), async (req, res) => 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
     console.log("Payment received:", session);
-    // Grant credits, save user info, etc.
+    
+    // Grant credits to user
+    const { userId, credits } = session.metadata || {};
+    
+    if (userId && userId !== 'anonymous' && credits) {
+      try {
+        const { db } = await import('./db');
+        const { users, purchases } = await import('../shared/schema');
+        const { eq } = await import('drizzle-orm');
+        
+        const userIdNum = parseInt(userId);
+        const creditsNum = parseInt(credits);
+        
+        // Record the purchase
+        await db.insert(purchases).values({
+          userId: userIdNum,
+          paypalOrderId: session.id,
+          amount: session.amount_total || 0,
+          tokensAdded: creditsNum,
+          status: 'completed',
+        });
+        
+        // Add credits to user account
+        const user = await db.select().from(users).where(eq(users.id, userIdNum)).limit(1);
+        if (user.length > 0) {
+          const newCredits = user[0]!.credits + creditsNum;
+          await db.update(users)
+            .set({ credits: newCredits })
+            .where(eq(users.id, userIdNum));
+          
+          console.log(`Successfully added ${creditsNum} credits to user ${userIdNum}`);
+        }
+      } catch (error) {
+        console.error('Error processing payment:', error);
+      }
+    }
   }
 
   res.status(200).send("OK");
