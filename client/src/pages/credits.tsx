@@ -107,6 +107,11 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/credits?success=true`,
+          payment_method_data: {
+            billing_details: {
+              email: 'user@placeholder.com' // Placeholder email for logged-in users
+            }
+          }
         },
       });
 
