@@ -134,6 +134,8 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
     setIsProcessing(false);
   };
 
+  const isHTTP = window.location.protocol === 'http:';
+
   return (
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
@@ -146,22 +148,50 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
         </div>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <PaymentElement 
-            options={{
-              wallets: {
-                amazonPay: 'never'
-              }
-            }}
-          />
-          <Button 
-            type="submit" 
-            className="w-full"
-            disabled={!stripe || !elements || isProcessing}
-          >
-            {isProcessing ? 'Processing...' : `Pay $${selectedPackage.price}`}
-          </Button>
-        </form>
+        {isHTTP ? (
+          // Development mode - show simple demo form
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-center mb-2">
+                <div className="text-yellow-600 font-medium">🚧 Development Mode</div>
+              </div>
+              <p className="text-sm text-yellow-700">
+                This is a demo. In production, real payment processing happens over HTTPS.
+              </p>
+            </div>
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={isProcessing}
+            >
+              {isProcessing ? 'Processing Demo...' : `Demo Purchase - $${selectedPackage.price}`}
+            </Button>
+          </form>
+        ) : (
+          // Production mode - show real Stripe form
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <PaymentElement 
+              options={{
+                wallets: {
+                  amazonPay: 'never',
+                  applePay: 'auto',
+                  googlePay: 'auto'
+                },
+                paymentMethodCreation: 'manual',
+                fields: {
+                  billingDetails: 'auto'
+                }
+              }}
+            />
+            <Button 
+              type="submit" 
+              className="w-full"
+              disabled={!stripe || !elements || isProcessing}
+            >
+              {isProcessing ? 'Processing...' : `Pay $${selectedPackage.price}`}
+            </Button>
+          </form>
+        )}
       </CardContent>
     </Card>
   );

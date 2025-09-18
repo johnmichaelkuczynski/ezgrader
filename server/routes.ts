@@ -481,18 +481,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // PayPal payment routes
-  app.get("/paypal/setup", async (req, res) => {
-    await loadPaypalDefault(req, res);
-  });
+  // PayPal payment routes (disabled)
+  // app.get("/paypal/setup", async (req, res) => {
+  //   await loadPaypalDefault(req, res);
+  // });
 
-  app.post("/paypal/order", async (req, res) => {
-    await createPaypalOrder(req, res);
-  });
+  // app.post("/paypal/order", async (req, res) => {
+  //   await createPaypalOrder(req, res);
+  // });
 
-  app.post("/paypal/order/:orderID/capture", async (req, res) => {
-    await capturePaypalOrder(req, res);
-  });
+  // app.post("/paypal/order/:orderID/capture", async (req, res) => {
+  //   await capturePaypalOrder(req, res);
+  // });
 
   // PayPal purchase initiation route
   app.post('/api/create-paypal-order', async (req: Request, res: Response) => {
@@ -590,10 +590,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Credits and amount are required' });
       }
 
-      // Create PaymentIntent
+      // Create PaymentIntent with payment method saving enabled and Amazon Pay disabled
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(amount * 100), // Convert to cents
         currency: 'usd',
+        setup_future_usage: 'on_session', // Enable saving payment methods
         metadata: {
           credits: credits.toString(),
           userId: req.session?.userId?.toString() || 'anonymous',
@@ -601,6 +602,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         automatic_payment_methods: {
           enabled: true,
+          allow_redirects: 'never' // Disable redirect-based payment methods like Amazon Pay
         },
       });
 
