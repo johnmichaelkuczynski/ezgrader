@@ -109,6 +109,7 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
           return_url: `${window.location.origin}/credits?success=true`,
           payment_method_data: {
             billing_details: {
+              name: 'Anonymous User',
               email: 'user@placeholder.com'
             }
           }
