@@ -23,7 +23,6 @@ import { db } from "./db";
 import { eq } from "drizzle-orm";
 // PayPal integration (commented out to prevent startup errors - user wants Stripe only)
 // import { createPaypalOrder, capturePaypalOrder, loadPaypalDefault } from "./paypal";
-import Stripe from "stripe";
 
 // Extend session type
 declare module 'express-session' {
@@ -47,10 +46,7 @@ const TOKEN_PRICING = {
   "1000": { price: 1000.00, tokens: 10000000 },
 };
 
-// Initialize Stripe
-const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: "2024-06-20",
-}) : null;
+// Stripe removed - using clean Live mode implementation in webhook.ts
 
 // Token costs for different actions
 const TOKEN_COSTS = {
@@ -579,106 +575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stripe payment routes
-  app.get('/api/stripe-config', async (req: Request, res: Response) => {
-    res.json({
-      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || ''
-    });
-  });
-
-  app.post('/api/create-payment-intent', async (req: Request, res: Response) => {
-    try {
-      if (!stripe) {
-        return res.status(500).json({ error: 'Stripe not configured' });
-      }
-
-      const { credits, amount, description } = req.body;
-      
-      if (!credits || !amount) {
-        return res.status(400).json({ error: 'Credits and amount are required' });
-      }
-
-      const isLoggedIn = !!req.session?.userId;
-      
-      // Create PaymentIntent - enable saving for logged-in users
-      const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(amount * 100), // Convert to cents
-        currency: 'usd',
-        setup_future_usage: isLoggedIn ? 'on_session' : undefined, // Only enable saving for logged-in users
-        payment_method_types: ['card'], // Only allow card payments - blocks Amazon Pay completely
-        metadata: {
-          credits: credits.toString(),
-          userId: req.session?.userId?.toString() || 'anonymous',
-          description: description || 'Credit purchase',
-          allow_save: isLoggedIn ? 'true' : 'false'
-        },
-      });
-
-      res.json({ 
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id
-      });
-    } catch (error: any) {
-      console.error('Error creating payment intent:', error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Stripe webhook endpoint
-  app.post('/api/stripe-webhook', async (req: Request, res: Response) => {
-    const sig = req.headers['stripe-signature'];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_EZGRADER;
-
-    if (!stripe || !webhookSecret) {
-      return res.status(500).json({ error: 'Stripe not configured' });
-    }
-
-    let event;
-
-    try {
-      event = stripe.webhooks.constructEvent(req.body, sig as string, webhookSecret);
-    } catch (err: any) {
-      console.error('Webhook signature verification failed:', err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    // Handle the event
-    if (event.type === 'payment_intent.succeeded') {
-      const paymentIntent = event.data.object;
-      const { credits, userId } = paymentIntent.metadata;
-
-      if (userId && userId !== 'anonymous') {
-        try {
-          const userIdNum = parseInt(userId);
-          const creditsNum = parseInt(credits);
-
-          // Record the purchase
-          await db.insert(purchases).values({
-            userId: userIdNum,
-            paypalOrderId: paymentIntent.id, // Reusing this field for Stripe payment intent ID
-            amount: paymentIntent.amount,
-            tokensAdded: creditsNum,
-            status: 'completed',
-          });
-
-          // Add credits to user account
-          const user = await db.select().from(users).where(eq(users.id, userIdNum)).limit(1);
-          if (user.length > 0) {
-            const newCredits = user[0]!.credits + creditsNum;
-            await db.update(users)
-              .set({ credits: newCredits })
-              .where(eq(users.id, userIdNum));
-          }
-
-          console.log(`Successfully added ${creditsNum} credits to user ${userIdNum}`);
-        } catch (error) {
-          console.error('Error processing successful payment:', error);
-        }
-      }
-    }
-
-    res.json({ received: true });
-  });
+  // Stripe integration moved to server/webhook.ts for clean Live mode implementation
   
   // Assignment Attachment Routes
   

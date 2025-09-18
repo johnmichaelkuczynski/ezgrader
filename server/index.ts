@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import webhookRouter from "./webhook";
 
 const app = express();
 
@@ -19,10 +20,13 @@ app.use(session({
 
 // JSON for everything EXCEPT the webhook
 app.use((req, res, next) => {
-  if (req.originalUrl === '/webhook') return next();
+  if (req.originalUrl.startsWith('/webhook')) return next();
   express.json({ limit: '200mb' })(req, res, next);
 });
 app.use(express.urlencoded({ extended: false, limit: '200mb' }));
+
+// Mount Stripe webhook before other routes
+app.use('/webhook', webhookRouter);
 
 app.use((req, res, next) => {
   const start = Date.now();
