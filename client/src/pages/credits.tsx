@@ -147,7 +147,13 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <PaymentElement />
+          <PaymentElement 
+            options={{
+              wallets: {
+                amazonPay: 'never'
+              }
+            }}
+          />
           <Button 
             type="submit" 
             className="w-full"
