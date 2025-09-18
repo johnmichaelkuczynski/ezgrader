@@ -46,15 +46,15 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
     setIsProcessing(true);
 
     try {
-      const response = await apiRequest('/api/create-checkout-session', {
-        method: 'POST',
-        body: JSON.stringify({ packageId: selectedPackage.id }),
-        headers: { 'Content-Type': 'application/json' }
+      const response = await apiRequest('POST', '/api/create-checkout-session', { 
+        packageId: selectedPackage.id 
       });
 
-      if (response.url) {
+      const data = await response.json();
+      
+      if (data.url) {
         // Redirect to Stripe checkout
-        window.location.href = response.url;
+        window.location.href = data.url;
       } else {
         throw new Error('No checkout URL received');
       }
