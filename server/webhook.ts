@@ -5,7 +5,7 @@ const router = express.Router();
 
 // Initialize Stripe only if Live secret key is present
 const stripe = process.env.STRIPE_SECRET_KEY 
-  ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" })
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
 router.post("/", express.raw({ type: "application/json" }), async (req, res) => {
@@ -57,7 +57,7 @@ router.post("/", express.raw({ type: "application/json" }), async (req, res) => 
         // Add credits to user account
         const user = await db.select().from(users).where(eq(users.id, userIdNum)).limit(1);
         if (user.length > 0) {
-          const newCredits = user[0]!.credits + creditsNum;
+          const newCredits = (user[0]?.credits || 0) + creditsNum;
           await db.update(users)
             .set({ credits: newCredits })
             .where(eq(users.id, userIdNum));

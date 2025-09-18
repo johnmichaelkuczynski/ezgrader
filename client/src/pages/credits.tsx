@@ -184,12 +184,12 @@ export default function Credits() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Purchase Credits</h1>
             <p className="text-gray-600 mb-4">Choose a credit package to continue using our AI grading platform</p>
             
-            {user && (
+{user ? (
               <div className="inline-flex items-center bg-blue-100 text-blue-800 px-4 py-2 rounded-full">
                 <CreditCard className="h-4 w-4 mr-2" />
-                Current Credits: {(user as any)?.credits?.toLocaleString() || 0}
+                Current Credits: {((user as any)?.user?.credits || 0).toLocaleString()}
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 

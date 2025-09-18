@@ -3,11 +3,20 @@ import { createServer, type Server } from "http";
 import bcrypt from 'bcryptjs';
 import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema, insertGradingResultSchema, insertAssignmentAttachmentSchema, loginSchema, registerSchema, users, purchaseSchema, purchases, tokenUsage, insertRewriteSessionSchema, rewriteRequestSchema, gptZeroAnalysisSchema } from "@shared/schema";
-import { detectAIContent } from "./services/gptzero";
+// AI detection function using GPTZero service
+async function detectAIContent(text: string) {
+  const result = await gptZeroService.analyzeText(text);
+  return {
+    aiProbability: result.aiScore / 100,
+    isAIGenerated: result.isAI
+  };
+}
 import { generateOpenAIResponse } from "./services/openai";
 import { generateAnthropicResponse } from "./services/anthropic";
 import { generatePerplexityResponse } from "./services/perplexity";
-import { gptZeroService } from "./services/gptZero";
+import { GPTZeroService } from "./services/gptZero";
+
+const gptZeroService = new GPTZeroService();
 import { aiProviderService } from "./services/aiProviders";
 import { textChunkerService } from "./services/textChunker";
 import { documentGeneratorService } from "./services/documentGenerator";
@@ -64,7 +73,7 @@ async function checkCredits(userId: number | undefined, requiredTokens: number):
   const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
   if (user.length === 0) return false;
   
-  return user[0]!.credits >= requiredTokens;
+  return (user[0]?.credits || 0) >= requiredTokens;
 }
 
 async function deductCredits(userId: number, tokensUsed: number, action: string, description?: string): Promise<boolean> {
@@ -73,7 +82,7 @@ async function deductCredits(userId: number, tokensUsed: number, action: string,
     const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
     if (user.length === 0) return false;
     
-    const newCredits = user[0]!.credits - tokensUsed;
+    const newCredits = (user[0]?.credits || 0) - tokensUsed;
     
     // Deduct from user credits
     await db.update(users)
@@ -554,7 +563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get current user credits and add new tokens
         const user = await db.select().from(users).where(eq(users.id, userId)).limit(1);
         if (user.length > 0) {
-          const newCredits = user[0]!.credits + tokens;
+          const newCredits = (user[0]?.credits || 0) + tokens;
           await db.update(users)
             .set({ credits: newCredits })
             .where(eq(users.id, userId));
@@ -584,9 +593,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: 'Stripe not configured' });
       }
 
-      const stripe = await import('stripe').then(m => new m.default(process.env.STRIPE_SECRET_KEY!, { 
-        apiVersion: "2024-06-20" 
-      }));
+      const stripe = await import('stripe').then(m => new m.default(process.env.STRIPE_SECRET_KEY!));
 
       // Package mapping
       const packages = {
