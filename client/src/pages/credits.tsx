@@ -46,10 +46,16 @@ const getStripePromise = async () => {
     try {
       const response = await fetch('/api/stripe-config');
       const { publishableKey } = await response.json();
-      stripePromise = loadStripe(publishableKey);
+      console.log('Received publishableKey:', publishableKey ? 'pk_***...' : 'undefined');
+      if (publishableKey) {
+        stripePromise = loadStripe(publishableKey);
+      } else {
+        console.error('No publishable key received from server');
+        stripePromise = Promise.resolve(null);
+      }
     } catch (error) {
       console.error('Failed to load Stripe config:', error);
-      stripePromise = loadStripe(''); // fallback
+      stripePromise = Promise.resolve(null);
     }
   }
   return stripePromise;

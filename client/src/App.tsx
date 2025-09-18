@@ -9,11 +9,11 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
-import Pricing from "@/pages/pricing";
+// import Pricing from "@/pages/pricing"; // Temporarily disabled - has Stripe env issues
 import Credits from "@/pages/credits";
-import Checkout from "@/pages/checkout";
+// import Checkout from "@/pages/checkout"; // Temporarily disabled - has Stripe env issues
 import Success from "@/pages/success";
-import CheckoutSuccess from "@/pages/checkout-success";
+// import CheckoutSuccess from "@/pages/checkout-success"; // Temporarily disabled - has Stripe env issues
 import { apiRequest } from "@/lib/queryClient";
 
 function Navigation() {
@@ -73,10 +73,10 @@ function Navigation() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setLocation("/pricing")}
+                onClick={() => setLocation("/credits")}
               >
                 <CreditCard className="h-4 w-4 mr-1" />
-                Pricing
+                Buy Credits
               </Button>
               <Button
                 variant="outline"
@@ -107,10 +107,10 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
-        <Route path="/pricing" component={Pricing} />
+        {/* <Route path="/pricing" component={Pricing} /> */}
         <Route path="/credits" component={Credits} />
-        <Route path="/checkout" component={Checkout} />
-        <Route path="/checkout/success" component={CheckoutSuccess} />
+        {/* <Route path="/checkout" component={Checkout} /> */}
+        {/* <Route path="/checkout/success" component={CheckoutSuccess} /> */}
         <Route path="/success" component={Success} />
         <Route component={NotFound} />
       </Switch>
