@@ -172,15 +172,13 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
           <form onSubmit={handleSubmit} className="space-y-4">
             <PaymentElement 
               options={{
-                wallets: {
-                  amazonPay: 'never',
-                  applePay: 'auto',
-                  googlePay: 'auto'
-                },
-                paymentMethodCreation: 'manual',
                 fields: {
-                  billingDetails: 'auto'
-                }
+                  billingDetails: {
+                    email: 'never' // Never require email - user is already logged in
+                  }
+                },
+                paymentMethodSave: 'disabled', // Let Stripe handle saving based on setup_future_usage
+                paymentMethodRemove: 'disabled'
               }}
             />
             <Button 

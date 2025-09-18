@@ -590,19 +590,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'Credits and amount are required' });
       }
 
-      // Create PaymentIntent with payment method saving enabled and Amazon Pay disabled
+      const isLoggedIn = !!req.session?.userId;
+      
+      // Create PaymentIntent - enable saving for logged-in users
       const paymentIntent = await stripe.paymentIntents.create({
         amount: Math.round(amount * 100), // Convert to cents
         currency: 'usd',
-        setup_future_usage: 'on_session', // Enable saving payment methods
+        setup_future_usage: isLoggedIn ? 'on_session' : undefined, // Only enable saving for logged-in users
+        payment_method_types: ['card'], // Only allow card payments - blocks Amazon Pay completely
         metadata: {
           credits: credits.toString(),
           userId: req.session?.userId?.toString() || 'anonymous',
-          description: description || 'Credit purchase'
-        },
-        automatic_payment_methods: {
-          enabled: true,
-          allow_redirects: 'never' // Disable redirect-based payment methods like Amazon Pay
+          description: description || 'Credit purchase',
+          allow_save: isLoggedIn ? 'true' : 'false'
         },
       });
 
