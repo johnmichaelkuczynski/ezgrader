@@ -1,5 +1,3 @@
-import { useStripe, Elements, PaymentElement, useElements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
 import { useEffect, useState } from 'react';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -38,32 +36,9 @@ const CREDIT_PACKAGES = [
   }
 ];
 
-// Fetch Stripe config from backend (more secure than env vars)
-let stripePromise: Promise<any> | null = null;
 
-const getStripePromise = async () => {
-  if (!stripePromise) {
-    try {
-      const response = await fetch('/api/stripe-config');
-      const { publishableKey } = await response.json();
-      console.log('Received publishableKey:', publishableKey ? 'pk_***...' : 'undefined');
-      if (publishableKey) {
-        stripePromise = loadStripe(publishableKey);
-      } else {
-        console.error('No publishable key received from server');
-        stripePromise = Promise.resolve(null);
-      }
-    } catch (error) {
-      console.error('Failed to load Stripe config:', error);
-      stripePromise = Promise.resolve(null);
-    }
-  }
-  return stripePromise;
-};
-
+// Placeholder for CheckoutForm - will be replaced with minimal card input form
 const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACKAGES[0] }) => {
-  const stripe = useStripe();
-  const elements = useElements();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -71,76 +46,15 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
     e.preventDefault();
     setIsProcessing(true);
 
-    // Check if we're in development mode (HTTP) - handle this first
-    const isHTTP = window.location.protocol === 'http:';
-    
-    if (isHTTP) {
-      // For development over HTTP, show a mock success message and redirect
-      toast({
-        title: "Development Mode Demo",
-        description: "Payment simulation successful! In production, this processes real payments over HTTPS.",
-        variant: "default",
-      });
-      
-      // Redirect to success page for demo purposes
-      setTimeout(() => {
-        window.location.href = '/credits?success=true';
-      }, 1500);
-      
-      setIsProcessing(false);
-      return;
-    }
-
-    // Only run Stripe logic if we're in production (HTTPS)
-    if (!stripe || !elements) {
-      toast({
-        title: "Payment System Loading",
-        description: "Please wait for the payment system to initialize and try again.",
-        variant: "destructive",
-      });
-      setIsProcessing(false);
-      return;
-    }
-
-    try {
-      const { error } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: `${window.location.origin}/credits?success=true`,
-          payment_method_data: {
-            billing_details: {
-              name: 'Anonymous User',
-              email: 'user@placeholder.com'
-            }
-          }
-        },
-      });
-
-      if (error) {
-        toast({
-          title: "Payment Failed",
-          description: error.message || "An error occurred during payment processing.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Payment Successful",
-          description: `${selectedPackage.credits} credits have been added to your account!`,
-        });
-      }
-    } catch (error: any) {
-      console.error('Payment error:', error);
-      toast({
-        title: "Payment Error", 
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
-      });
-    }
+    // Placeholder for payment processing logic
+    toast({
+      title: "Payment Processing",
+      description: "Payment integration will be implemented here",
+      variant: "default",
+    });
     
     setIsProcessing(false);
   };
-
-  const isHTTP = window.location.protocol === 'http:';
 
   return (
     <Card className="w-full max-w-md mx-auto">
@@ -154,44 +68,21 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
         </div>
       </CardHeader>
       <CardContent>
-        {isHTTP ? (
-          // Development mode - show simple demo form
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <div className="flex items-center mb-2">
-                <div className="text-yellow-600 font-medium">🚧 Development Mode</div>
-              </div>
-              <p className="text-sm text-yellow-700">
-                This is a demo. In production, real payment processing happens over HTTPS.
-              </p>
-            </div>
-            <Button 
-              type="submit" 
-              className="w-full"
-              disabled={isProcessing}
-            >
-              {isProcessing ? 'Processing Demo...' : `Demo Purchase - $${selectedPackage.price}`}
-            </Button>
-          </form>
-        ) : (
-          // Production mode - show real Stripe form
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <PaymentElement 
-              options={{
-                fields: {
-                  billingDetails: 'never'
-                }
-              }}
-            />
-            <Button 
-              type="submit" 
-              className="w-full"
-              disabled={!stripe || !elements || isProcessing}
-            >
-              {isProcessing ? 'Processing...' : `Pay $${selectedPackage.price}`}
-            </Button>
-          </form>
-        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Placeholder space for minimal card input form */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+            <p className="text-sm text-gray-600 text-center">
+              Card payment form will be implemented here
+            </p>
+          </div>
+          <Button 
+            type="submit" 
+            className="w-full"
+            disabled={isProcessing}
+          >
+            {isProcessing ? 'Processing...' : `Pay $${selectedPackage.price}`}
+          </Button>
+        </form>
       </CardContent>
     </Card>
   );
@@ -199,9 +90,7 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
 
 export default function Credits() {
   const [selectedPackage, setSelectedPackage] = useState<typeof CREDIT_PACKAGES[0] | null>(null);
-  const [clientSecret, setClientSecret] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [stripeInstance, setStripeInstance] = useState<any>(null);
 
   // Get current user info
   const { data: user } = useQuery({
@@ -209,18 +98,6 @@ export default function Credits() {
     retry: false,
   });
 
-  // Initialize Stripe
-  useEffect(() => {
-    const initStripe = async () => {
-      try {
-        const stripe = await getStripePromise();
-        setStripeInstance(stripe);
-      } catch (error) {
-        console.error('Failed to initialize Stripe:', error);
-      }
-    };
-    initStripe();
-  }, []);
 
   // Check for success parameter in URL
   const urlParams = new URLSearchParams(window.location.search);
@@ -237,40 +114,14 @@ export default function Credits() {
     setSelectedPackage(pkg);
     setIsLoading(true);
 
-    try {
-      const response = await apiRequest("POST", "/api/create-payment-intent", {
-        credits: pkg.credits,
-        amount: pkg.price,
-        description: `${pkg.name} - ${pkg.credits} credits`
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setClientSecret(data.clientSecret);
-      } else {
-        throw new Error('Failed to create payment intent');
-      }
-    } catch (error) {
-      console.error('Error creating payment intent:', error);
-      setSelectedPackage(null);
-    } finally {
+    // Placeholder - payment intent creation will be implemented here
+    setTimeout(() => {
       setIsLoading(false);
-    }
+    }, 1000);
   };
 
-  // Show checkout form if package is selected and we have clientSecret
-  if (selectedPackage && clientSecret) {
-    if (!stripeInstance) {
-      return (
-        <div className="min-h-screen bg-gray-50 py-8 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p>Loading payment form...</p>
-          </div>
-        </div>
-      );
-    }
-
+  // Show checkout form if package is selected
+  if (selectedPackage) {
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="container mx-auto px-4">
@@ -279,7 +130,6 @@ export default function Credits() {
               variant="ghost" 
               onClick={() => {
                 setSelectedPackage(null);
-                setClientSecret('');
               }}
               className="mb-4"
             >
@@ -288,9 +138,7 @@ export default function Credits() {
             </Button>
           </div>
           
-          <Elements stripe={stripeInstance} options={{ clientSecret }}>
-            <CheckoutForm selectedPackage={selectedPackage} />
-          </Elements>
+          <CheckoutForm selectedPackage={selectedPackage} />
         </div>
       </div>
     );
@@ -381,7 +229,7 @@ export default function Credits() {
         </div>
 
         <div className="mt-12 text-center text-sm text-gray-500">
-          <p>Secure payment processing powered by Stripe</p>
+          <p>Secure payment processing</p>
           <p className="mt-2">Credits never expire and can be used for all AI features</p>
         </div>
       </div>

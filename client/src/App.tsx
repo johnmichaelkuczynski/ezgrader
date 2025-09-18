@@ -9,11 +9,9 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
-// import Pricing from "@/pages/pricing"; // Temporarily disabled - has Stripe env issues
+import Pricing from "@/pages/pricing";
 import Credits from "@/pages/credits";
-// import Checkout from "@/pages/checkout"; // Temporarily disabled - has Stripe env issues
 import Success from "@/pages/success";
-// import CheckoutSuccess from "@/pages/checkout-success"; // Temporarily disabled - has Stripe env issues
 import { apiRequest } from "@/lib/queryClient";
 
 function Navigation() {
@@ -107,7 +105,7 @@ function Router() {
         <Route path="/" component={Home} />
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
-        {/* <Route path="/pricing" component={Pricing} /> */}
+        <Route path="/pricing" component={Pricing} />
         <Route path="/credits" component={Credits} />
         {/* <Route path="/checkout" component={Checkout} /> */}
         {/* <Route path="/checkout/success" component={CheckoutSuccess} /> */}

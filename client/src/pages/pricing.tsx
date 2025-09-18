@@ -6,10 +6,6 @@ import { Check, CreditCard, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
-// Load Stripe properly using loadStripe
-import { loadStripe } from '@stripe/stripe-js';
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 const pricingTiers = [
   { id: "10", price: 10, credits: 10, popular: false },
@@ -25,76 +21,14 @@ export default function Pricing() {
   const buyCredits = async (tier: string) => {
     setLoading(tier);
     
-    // 1) Get logged-in user id (works even if cookies are blocked in iframes)
-    let userId = null;
-    try {
-      const who = await fetch('/api/whoami', { credentials: 'include' });
-      if (who.ok) {
-        const j = await who.json();
-        userId = j.userId || null;
-      }
-    } catch (e) {
-      console.error('Failed to check authentication:', e);
-    }
-
-    if (!userId) {
-      // Force real-page auth flow
-      setLocation('/login');
-      setLoading(null);
-      return;
-    }
-
-    // 2) Create checkout session and navigate
-    try {
-      const r = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-user-id': String(userId)
-        },
-        body: JSON.stringify({ priceTier: tier })
-      });
-      const data = await r.json();
-
-      if (data.url) {
-        window.location.assign(data.url);
-        return;
-      }
-      if (data.id) {
-        const stripe = await stripePromise;
-        if (stripe) {
-          const { error } = await stripe.redirectToCheckout({ sessionId: data.id });
-          if (error) {
-            toast({
-              title: "Error",
-              description: error.message || "Failed to redirect to checkout",
-              variant: "destructive",
-            });
-          }
-        } else {
-          toast({
-            title: "Error",
-            description: "Stripe failed to load. Please refresh and try again.",
-            variant: "destructive",
-          });
-        }
-        setLoading(null);
-        return;
-      }
-      toast({
-        title: "Error",
-        description: "Checkout init failed",
-        variant: "destructive",
-      });
-      setLoading(null);
-    } catch (e: any) {
-      toast({
-        title: "Error",
-        description: e && e.message ? e.message : 'Checkout error',
-        variant: "destructive",
-      });
-      setLoading(null);
-    }
+    // Placeholder for credit purchase logic
+    toast({
+      title: "Credit Purchase",
+      description: "Credit purchase functionality will be implemented here",
+      variant: "default",
+    });
+    
+    setLoading(null);
   };
 
   return (
