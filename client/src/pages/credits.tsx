@@ -14,6 +14,15 @@ const stripe = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 // Credit packages available for purchase
 const CREDIT_PACKAGES = [
   {
+    id: 'trial',
+    priceTier: '1',
+    name: 'Trial Pack',
+    credits: 100,
+    price: 0.99,
+    description: 'Try our AI grading service',
+    popular: false
+  },
+  {
     id: 'small',
     priceTier: '10',
     name: 'Starter Pack',

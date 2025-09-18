@@ -49,6 +49,7 @@ declare module 'express-session' {
 
 // Token pricing tiers (PayPal uses dollars, not cents)
 const TOKEN_PRICING = {
+  "1": { price: 0.99, tokens: 100 },
   "5": { price: 5.00, tokens: 5000 },
   "10": { price: 10.00, tokens: 20000 },
   "100": { price: 100.00, tokens: 500000 },
@@ -597,6 +598,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Price tier mapping
       const priceTiers = {
+        '1': { credits: 100, price: 99, name: 'Trial Pack' },
         '10': { credits: 1000, price: 999, name: 'Starter Pack' },
         '50': { credits: 5000, price: 3999, name: 'Pro Pack' },
         '100': { credits: 15000, price: 9999, name: 'Enterprise Pack' }
