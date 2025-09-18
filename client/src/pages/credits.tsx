@@ -7,11 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { ArrowLeft, CreditCard, Star } from 'lucide-react';
+import { loadStripe } from '@stripe/stripe-js';
+
+const stripe = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
 // Credit packages available for purchase
 const CREDIT_PACKAGES = [
   {
     id: 'small',
+    priceTier: '10',
     name: 'Starter Pack',
     credits: 1000,
     price: 9.99,
@@ -20,6 +24,7 @@ const CREDIT_PACKAGES = [
   },
   {
     id: 'medium',
+    priceTier: '50',
     name: 'Pro Pack',
     credits: 5000,
     price: 39.99,
@@ -28,6 +33,7 @@ const CREDIT_PACKAGES = [
   },
   {
     id: 'large',
+    priceTier: '100',
     name: 'Enterprise Pack',
     credits: 15000,
     price: 99.99,
@@ -46,18 +52,24 @@ const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACK
     setIsProcessing(true);
 
     try {
-      const response = await apiRequest('POST', '/api/create-checkout-session', { 
-        packageId: selectedPackage.id 
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceTier: selectedPackage.priceTier })
       });
 
-      const data = await response.json();
+      const { id, error } = await response.json();
       
-      if (data.url) {
-        // Redirect to Stripe checkout
-        window.location.href = data.url;
-      } else {
-        throw new Error('No checkout URL received');
+      if (!id) {
+        throw new Error(error || 'Checkout init failed');
       }
+
+      const stripeInstance = await stripe;
+      if (!stripeInstance) {
+        throw new Error('Stripe not loaded');
+      }
+
+      await stripeInstance.redirectToCheckout({ sessionId: id });
     } catch (error: any) {
       console.error('Checkout error:', error);
       toast({

@@ -585,9 +585,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Stripe checkout session creation
-  app.post('/api/create-checkout-session', async (req: Request, res: Response) => {
+  app.post('/api/checkout', async (req: Request, res: Response) => {
     try {
-      const { packageId } = req.body;
+      const { priceTier } = req.body;
       
       if (!process.env.STRIPE_SECRET_KEY) {
         return res.status(500).json({ error: 'Stripe not configured' });
@@ -595,16 +595,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const stripe = await import('stripe').then(m => new m.default(process.env.STRIPE_SECRET_KEY!));
 
-      // Package mapping
-      const packages = {
-        'small': { credits: 1000, price: 999, name: 'Starter Pack' },
-        'medium': { credits: 5000, price: 3999, name: 'Pro Pack' },
-        'large': { credits: 15000, price: 9999, name: 'Enterprise Pack' }
+      // Price tier mapping
+      const priceTiers = {
+        '10': { credits: 1000, price: 999, name: 'Starter Pack' },
+        '50': { credits: 5000, price: 3999, name: 'Pro Pack' },
+        '100': { credits: 15000, price: 9999, name: 'Enterprise Pack' }
       };
 
-      const selectedPackage = packages[packageId as keyof typeof packages];
-      if (!selectedPackage) {
-        return res.status(400).json({ error: 'Invalid package' });
+      const selectedTier = priceTiers[priceTier as keyof typeof priceTiers];
+      if (!selectedTier) {
+        return res.status(400).json({ error: 'Invalid price tier' });
       }
 
       const session = await stripe.checkout.sessions.create({
@@ -614,10 +614,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             price_data: {
               currency: 'usd',
               product_data: {
-                name: selectedPackage.name,
-                description: `${selectedPackage.credits} credits for Grading Pro`,
+                name: selectedTier.name,
+                description: `${selectedTier.credits} credits for Grading Pro`,
               },
-              unit_amount: selectedPackage.price,
+              unit_amount: selectedTier.price,
             },
             quantity: 1,
           },
@@ -627,12 +627,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cancel_url: `${req.protocol}://${req.get('host')}/credits`,
         metadata: {
           userId: req.session?.userId?.toString() || 'anonymous',
-          credits: selectedPackage.credits.toString(),
-          packageId: packageId
+          credits: selectedTier.credits.toString(),
+          priceTier: priceTier
         },
       });
 
-      res.json({ url: session.url });
+      res.json({ id: session.id });
     } catch (error: any) {
       console.error('Error creating checkout session:', error);
       res.status(500).json({ error: error.message });
