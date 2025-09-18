@@ -10,6 +10,7 @@ import Home from "@/pages/home";
 import Login from "@/pages/login";
 import Register from "@/pages/register";
 import Pricing from "@/pages/pricing";
+import Credits from "@/pages/credits";
 import Checkout from "@/pages/checkout";
 import Success from "@/pages/success";
 import CheckoutSuccess from "@/pages/checkout-success";
@@ -53,7 +54,7 @@ function Navigation() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setLocation("/pricing")}
+                onClick={() => setLocation("/credits")}
               >
                 <CreditCard className="h-4 w-4 mr-1" />
                 Buy Credits
@@ -107,6 +108,7 @@ function Router() {
         <Route path="/login" component={Login} />
         <Route path="/register" component={Register} />
         <Route path="/pricing" component={Pricing} />
+        <Route path="/credits" component={Credits} />
         <Route path="/checkout" component={Checkout} />
         <Route path="/checkout/success" component={CheckoutSuccess} />
         <Route path="/success" component={Success} />
