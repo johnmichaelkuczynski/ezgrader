@@ -38,8 +38,22 @@ const CREDIT_PACKAGES = [
   }
 ];
 
-// Use the existing STRIPE_PUBLISHABLE_KEY secret
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY || '');
+// Fetch Stripe config from backend (more secure than env vars)
+let stripePromise: Promise<any> | null = null;
+
+const getStripePromise = async () => {
+  if (!stripePromise) {
+    try {
+      const response = await fetch('/api/stripe-config');
+      const { publishableKey } = await response.json();
+      stripePromise = loadStripe(publishableKey);
+    } catch (error) {
+      console.error('Failed to load Stripe config:', error);
+      stripePromise = loadStripe(''); // fallback
+    }
+  }
+  return stripePromise;
+};
 
 const CheckoutForm = ({ selectedPackage }: { selectedPackage: typeof CREDIT_PACKAGES[0] }) => {
   const stripe = useStripe();
@@ -109,12 +123,26 @@ export default function Credits() {
   const [selectedPackage, setSelectedPackage] = useState<typeof CREDIT_PACKAGES[0] | null>(null);
   const [clientSecret, setClientSecret] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [stripeInstance, setStripeInstance] = useState<any>(null);
 
   // Get current user info
   const { data: user } = useQuery({
     queryKey: ['/api/auth/me'],
     retry: false,
   });
+
+  // Initialize Stripe
+  useEffect(() => {
+    const initStripe = async () => {
+      try {
+        const stripe = await getStripePromise();
+        setStripeInstance(stripe);
+      } catch (error) {
+        console.error('Failed to initialize Stripe:', error);
+      }
+    };
+    initStripe();
+  }, []);
 
   // Check for success parameter in URL
   const urlParams = new URLSearchParams(window.location.search);
@@ -154,6 +182,17 @@ export default function Credits() {
 
   // Show checkout form if package is selected and we have clientSecret
   if (selectedPackage && clientSecret) {
+    if (!stripeInstance) {
+      return (
+        <div className="min-h-screen bg-gray-50 py-8 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>Loading payment form...</p>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gray-50 py-8">
         <div className="container mx-auto px-4">
@@ -171,7 +210,7 @@ export default function Credits() {
             </Button>
           </div>
           
-          <Elements stripe={stripePromise} options={{ clientSecret }}>
+          <Elements stripe={stripeInstance} options={{ clientSecret }}>
             <CheckoutForm selectedPackage={selectedPackage} />
           </Elements>
         </div>
