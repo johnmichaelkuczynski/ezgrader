@@ -107,6 +107,12 @@ This is a full-stack web application called "Grading Pro" - an AI-powered educat
 
 ```
 Changelog:
+- September 17, 2025: **CRITICAL DATABASE FIX**: Fixed assignment saving to use permanent Neon database storage
+  * Changed storage from MemStorage to DatabaseStorage in server/storage.ts for permanent data persistence
+  * Verified user profiles exist permanently in database (12 users including jmkuczynski, randyjohnson with unlimited credits)
+  * All assignments now save permanently to PostgreSQL database and persist across application restarts
+  * Fixed assignment creation/saving system - assignments now properly stored with user isolation
+  * Completed comprehensive inter-component communication system testing - all send buttons working perfectly
 - September 16, 2025: **MAJOR UX ENHANCEMENT**: Completed comprehensive inter-component communication system for AI Text Rewriter (Humanizer)
   * Added copy button above Box C and trash can buttons above each box (A, B, C) in AI Text Rewriter
   * Implemented "Send Box C → Student Submission" functionality for seamless workflow
