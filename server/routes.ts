@@ -349,22 +349,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { username, password } = result.data;
+      const { email, username, password } = result.data;
 
-      // Check if username already exists
-      const existingUser = await db.select().from(users).where(eq(users.username, username)).limit(1);
+      // Check if email already exists
+      const existingUser = await db.select().from(users).where(eq(users.email, email)).limit(1);
       if (existingUser.length > 0) {
-        return res.status(400).json({ message: 'Username already exists' });
+        return res.status(400).json({ message: 'Email already exists' });
       }
 
-      // Hash password
-      const hashedPassword = await bcrypt.hash(password, 10);
+      // Hash password (only if provided)
+      const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
 
-      // Create user with 0 credits
+      // Create user with 0 credits (unlimited for special accounts)
+      const credits = email.toLowerCase() === 'jmkuczynski@yahoo.com' ? 999999999 : 0;
+      
       const newUsers = await db.insert(users).values({
         username,
+        email,
         password: hashedPassword,
-        credits: 0,
+        credits,
       }).returning();
 
       const newUser = newUsers[0];
@@ -393,46 +396,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const { username, password } = result.data;
+      const { email, password } = result.data;
 
-      // Special testing bypass for JMKUCZYNSKI and RANDYJOHNSON
-      if (username.toUpperCase() === 'JMKUCZYNSKI' || username.toUpperCase() === 'RANDYJOHNSON') {
-        // Create/find test user with unlimited credits
-        let testUser = await db.select().from(users).where(eq(users.username, username.toLowerCase())).limit(1);
+      // Special case for jmkuczynski@yahoo.com - no password required
+      if (email.toLowerCase() === 'jmkuczynski@yahoo.com') {
+        // Create/find special user with unlimited credits
+        let specialUser = await db.select().from(users).where(eq(users.email, email.toLowerCase())).limit(1);
         
-        if (testUser.length === 0) {
-          // Create test user
-          const [newTestUser] = await db.insert(users).values({
-            username: username.toLowerCase(),
-            password: await bcrypt.hash('testpassword', 10),
+        if (specialUser.length === 0) {
+          // Create special user without password
+          const [newSpecialUser] = await db.insert(users).values({
+            username: 'jmkuczynski',
+            email: email.toLowerCase(),
+            password: null, // No password required
             credits: 999999999 // Unlimited credits
           }).returning();
-          testUser = [newTestUser];
+          specialUser = [newSpecialUser];
         } else {
-          // Update existing test user with unlimited credits
+          // Update existing special user with unlimited credits
           await db.update(users)
             .set({ credits: 999999999 })
-            .where(eq(users.id, testUser[0].id));
-          testUser[0].credits = 999999999;
+            .where(eq(users.id, specialUser[0].id));
+          specialUser[0].credits = 999999999;
         }
         
         // Set session
-        req.session.userId = testUser[0].id;
-        req.session.username = testUser[0].username;
+        req.session.userId = specialUser[0].id;
+        req.session.username = specialUser[0].username;
         
         return res.json({ 
-          message: 'Test login successful (unlimited credits)',
-          user: { id: testUser[0].id, username: testUser[0].username }
+          message: 'Special account login successful (unlimited credits)',
+          user: { id: specialUser[0].id, username: specialUser[0].username, email: specialUser[0].email }
         });
       }
 
       // Regular authentication for other users
-      const user = await db.select().from(users).where(eq(users.username, username)).limit(1);
+      const user = await db.select().from(users).where(eq(users.email, email)).limit(1);
       if (user.length === 0) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
-      // Check password
+      // Check password (required for regular users)
+      if (!password || !user[0].password) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      
       const validPassword = await bcrypt.compare(password, user[0].password);
       if (!validPassword) {
         return res.status(401).json({ message: 'Invalid credentials' });
